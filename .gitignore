@@ -1,0 +1,15 @@
+# nezha Python 项目忽略文件
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+env/
+.venv/
+build/
+dist/
+.eggs/
+*.egg-info/
+.DS_Store
+.idea/
+.vscode/
+nezha - cli agent.md

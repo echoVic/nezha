@@ -1,0 +1,22 @@
+# nezha 配置文件示例
+llm:
+  provider: openai
+  api_key: "YOUR_API_KEY"
+  model: "gpt-4o"
+  endpoint: "https://api.openai.com/v1/chat/completions"
+  temperature: 0.2
+  max_tokens: 2048
+security:
+  allow_bash: false
+  allow_file_write: true
+  allow_file_edit: true
+  confirm_high_risk: true
+tools:
+  enabled:
+    - FileRead
+    - FileWrite
+    - FileEdit
+    - Glob
+    - Grep
+    - Ls
+    - Bash
