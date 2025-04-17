@@ -155,6 +155,164 @@ def version_callback(value: bool):
         console.print("[bold cyan]nezha[/bold cyan] 版本 0.1.0")
         raise typer.Exit()
 
+@app.command()
+def init(
+    config_file: Optional[Path] = typer.Option(
+        Path("config/config.yaml"), 
+        "--config", 
+        "-c", 
+        help="配置文件路径"
+    ),
+    security_config: Optional[Path] = typer.Option(
+        Path("config/security_config.yaml"), 
+        "--security-config", 
+        "-s", 
+        help="安全配置文件路径"
+    )
+):
+    """nezha 初始化命令 - 配置大模型接口、token和规则集"""
+    # 显示初始化信息
+    console.print(Panel("[bold]初始化nezha配置[/bold]", title="nezha init", border_style="blue"))
+    
+    # 确保配置目录存在
+    config_dir = Path("config")
+    config_dir.mkdir(exist_ok=True)
+    
+    # 初始化LLM配置
+    llm_config = {}
+    console.print("\n[bold]配置大模型接口[/bold]")
+    
+    # 选择LLM提供商
+    providers = ["openai", "azure", "anthropic", "other"]
+    provider_idx = typer.prompt(
+        "选择大模型提供商", 
+        type=int, 
+        default=1, 
+        show_choices=False,
+        show_default=False,
+        prompt_suffix="\n1. OpenAI\n2. Azure OpenAI\n3. Anthropic\n4. 其他\n请选择 [1-4]: "
+    )
+    
+    provider = providers[provider_idx - 1] if 0 < provider_idx <= len(providers) else providers[0]
+    llm_config["provider"] = provider
+    
+    # 配置API密钥
+    api_key = typer.prompt(f"输入{provider}的API密钥", hide_input=True)
+    llm_config["api_key"] = api_key
+    
+    # 配置模型
+    default_models = {
+        "openai": "gpt-4o",
+        "azure": "gpt-4",
+        "anthropic": "claude-3-opus",
+        "other": ""
+    }
+    model = typer.prompt("输入模型名称", default=default_models.get(provider, ""))
+    llm_config["model"] = model
+    
+    # 配置API端点
+    default_endpoints = {
+        "openai": "https://api.openai.com/v1/chat/completions",
+        "azure": "https://your-resource.openai.azure.com/openai/deployments/your-deployment/chat/completions",
+        "anthropic": "https://api.anthropic.com/v1/messages",
+        "other": ""
+    }
+    endpoint = typer.prompt("输入API端点", default=default_endpoints.get(provider, ""))
+    llm_config["endpoint"] = endpoint
+    
+    # 配置温度和最大token
+    temperature = typer.prompt("设置temperature参数", type=float, default=0.2)
+    max_tokens = typer.prompt("设置最大输出token数", type=int, default=2048)
+    llm_config["temperature"] = temperature
+    llm_config["max_tokens"] = max_tokens
+    
+    # 配置安全设置
+    console.print("\n[bold]配置安全设置[/bold]")
+    security_levels = ["strict", "normal", "relaxed", "bypass"]
+    security_level_idx = typer.prompt(
+        "选择安全级别", 
+        type=int, 
+        default=2, 
+        show_choices=False,
+        show_default=False,
+        prompt_suffix="\n1. 严格 (strict)\n2. 标准 (normal)\n3. 宽松 (relaxed)\n4. 跳过确认 (bypass)\n请选择 [1-4]: "
+    )
+    
+    security_level = security_levels[security_level_idx - 1] if 0 < security_level_idx <= len(security_levels) else security_levels[1]
+    
+    # 配置规则集
+    console.print("\n[bold]配置规则集[/bold]")
+    use_rules = typer.confirm("是否配置特定规则集?", default=False)
+    rules_config = {}
+    
+    if use_rules:
+        rule_types = ["windsurfrules", "cursorrules", "custom"]
+        rule_type_idx = typer.prompt(
+            "选择规则集类型", 
+            type=int, 
+            default=1, 
+            show_choices=False,
+            show_default=False,
+            prompt_suffix="\n1. windsurfrules\n2. cursorrules\n3. 自定义规则\n请选择 [1-3]: "
+        )
+        
+        rule_type = rule_types[rule_type_idx - 1] if 0 < rule_type_idx <= len(rule_types) else rule_types[0]
+        rules_config["type"] = rule_type
+        
+        if rule_type == "custom":
+            rules_path = typer.prompt("输入自定义规则文件路径")
+            rules_config["path"] = rules_path
+    
+    # 生成配置文件
+    import yaml
+
+    # 生成主配置文件
+    full_config = {
+        "llm": llm_config,
+        "security": {
+            "allow_bash": security_level in ["relaxed", "bypass"],
+            "allow_file_write": security_level != "strict",
+            "allow_file_edit": security_level != "strict",
+            "confirm_high_risk": security_level != "bypass"
+        },
+        "tools": {
+            "enabled": [
+                "FileRead", 
+                "FileWrite", 
+                "FileEdit", 
+                "Glob", 
+                "Grep", 
+                "Ls"
+            ]
+        }
+    }
+    
+    if use_rules:
+        full_config["rules"] = rules_config
+    
+    # 生成安全配置文件
+    security_config_data = {
+        "security_level": security_level,
+        "yes_to_all": False,
+        "allowed_paths": [],
+        "disabled_tools": []
+    }
+    
+    # 写入配置文件
+    try:
+        with open(config_file, "w") as f:
+            yaml.dump(full_config, f, default_flow_style=False, sort_keys=False)
+        
+        with open(security_config, "w") as f:
+            yaml.dump(security_config_data, f, default_flow_style=False, sort_keys=False)
+        
+        console.print(f"\n[bold green]✓[/bold green] 配置已保存至: [bold]{config_file}[/bold] 和 [bold]{security_config}[/bold]")
+        console.print("\n现在你可以使用 [bold]nezha <指令>[/bold] 来执行任务了!")
+    except Exception as e:
+        console.print(Panel(f"[bold]保存配置时出错:[/bold] {e}", title="错误", border_style="red"))
+        raise typer.Exit(code=1)
+
+
 @app.callback(invoke_without_command=True)
 def callback(version: bool = typer.Option(False, "--version", "-V", help="显示版本信息", callback=version_callback)):
     """nezha - 基于AI的命令行代码助手"""
@@ -163,7 +321,7 @@ def callback(version: bool = typer.Option(False, "--version", "-V", help="显示
     if ctx.invoked_subcommand is None and not version:
         console.print(
             "[bold cyan]nezha[/bold cyan] - [italic]AI命令行代码助手[/italic] 🚀\n",
-            "使用 [bold]nezha <指令>[/bold] 执行任务，或 [bold]nezha plan <需求>[/bold] 进行交互式规划\n"
+            "使用 [bold]nezha <指令>[/bold] 执行任务，[bold]nezha plan <需求>[/bold] 进行交互式规划，或 [bold]nezha init[/bold] 初始化配置\n"
         )
         console.print("运行 [bold]nezha --help[/bold] 获取更多帮助信息")
 
