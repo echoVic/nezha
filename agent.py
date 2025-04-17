@@ -1,6 +1,7 @@
 """
 Agent 核心逻辑类
 """
+import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -11,31 +12,121 @@ from context_engine import \
 from llm_interface import LLMInterfaceBase, get_llm_interface
 from security import SecurityManager
 
-DEFAULT_CONFIG_PATH = Path("config/config.yaml")
+# 导入获取当前模型的函数
+try:
+    from cli import get_current_model
+except ImportError:
+    # 如果无法导入，定义一个空函数
+    def get_current_model():
+        return None
+
+# 默认配置路径
+DEFAULT_CONFIG_PATH = Path(os.path.expanduser("~/.config/nezha/config.yaml"))
+# 默认内置配置路径
+DEFAULT_BUILTIN_CONFIG_PATH = Path("config/default_config.yaml")
 
 class NezhaAgent:
     def __init__(self, security_manager: SecurityManager, config_file: Optional[Path] = None):
         self.security_manager = security_manager
-        self.config_path = config_file or DEFAULT_CONFIG_PATH
+        self.config_file = config_file
         self.config = self._load_config()
-        llm_config = self.config.get("llm", {})
+
+        # 优先使用内存中的模型设置
+        current_model = get_current_model()
+        if current_model:
+            llm_config = dict(current_model)
+            # 合并推理参数
+            file_llm_config = self.config.get("llm", {})
+            for key, value in file_llm_config.items():
+                if key not in llm_config and key not in ["provider", "model", "api_key", "endpoint"]:
+                    llm_config[key] = value
+            print(f"\n使用内存中的模型设置: {current_model['name']}")
+        else:
+            # 读取 llm 字段和 models 列表
+            llm_section = self.config.get("llm", {})
+            model_id = llm_section.get("model")
+            user_models = self.config.get("models", [])
+            # 延迟导入 PREDEFINED_MODELS，避免循环引用
+            try:
+                from cli import PREDEFINED_MODELS
+            except ImportError:
+                PREDEFINED_MODELS = []
+            all_models = PREDEFINED_MODELS + user_models
+            # 查找完整模型配置
+            model_conf = next((m for m in all_models if m.get("id") == model_id), None)
+            llm_config = dict(model_conf) if model_conf else {}
+            # 确保 model 字段存在
+            if "id" in llm_config and "model" not in llm_config:
+                llm_config["model"] = llm_config["id"]
+            # 合并推理参数（如 temperature/max_tokens）
+            for key in ["temperature", "max_tokens"]:
+                if key in llm_section:
+                    llm_config[key] = llm_section[key]
+
+        
         self.llm_interface: LLMInterfaceBase = get_llm_interface(llm_config)
         # TODO: Initialize other components like tool registry based on config
 
     def _load_config(self) -> Dict[str, Any]:
-        """加载配置文件"""
-        if self.config_path and Path(self.config_path).exists():
+        """加载配置文件，如果文件不存在或加载失败，使用默认配置"""
+        # 首先尝试从配置文件加载
+        if self.config_file and Path(self.config_file).exists():
             try:
-                with open(self.config_path, 'r', encoding='utf-8') as f:
-                    return yaml.safe_load(f) or {}
+                with open(self.config_file, 'r', encoding='utf-8') as f:
+                    config = yaml.safe_load(f) or {}
+                    if config:
+                        print(f"\n成功从 {self.config_file} 加载配置")
+                        return config
             except Exception as e:
                 # TODO: Add proper logging/error handling
                 print(f"Error loading config file {self.config_path}: {e}")
-                return {}
-        else:
-            # TODO: Handle missing config file scenario (e.g., prompt init)
-            print(f"Warning: Config file not found at {self.config_path}. Using default settings.")
-            return {}
+        
+        # 如果配置文件不存在或加载失败，使用默认配置
+        print(f"\n注意: 配置文件不存在或加载失败，使用默认配置。")
+        
+        # 尝试从默认内置配置文件加载
+        if DEFAULT_BUILTIN_CONFIG_PATH.exists():
+            try:
+                with open(DEFAULT_BUILTIN_CONFIG_PATH, 'r', encoding='utf-8') as f:
+                    default_config = yaml.safe_load(f) or {}
+                    if default_config and default_config.get("llm", {}).get("model"):
+                        model_id = default_config.get("llm", {}).get("model")
+                        print(f"默认使用火山引擎模型: {model_id}")
+                        return default_config
+            except Exception as e:
+                print(f"Error loading default config file {DEFAULT_BUILTIN_CONFIG_PATH}: {e}")
+        
+        # 如果默认内置配置文件也不存在或加载失败，使用硬编码的配置
+        print(f"默认内置配置文件也不可用，使用硬编码配置。")
+        print(f"默认使用火山引擎模型: ep-20250417174840-6c94l")
+        
+        # 硬编码的默认配置（仅在其他方式都失败时使用）
+        return {
+            "llm": {
+                "provider": "volcengine",
+                "api_key": "1ddfaee1-1350-46b0-ab87-2db988d24d4b",
+                "model": "ep-20250417174840-6c94l",
+                "endpoint": "https://ark.cn-beijing.volces.com/api/v3",
+                "temperature": 0.2,
+                "max_tokens": 2048
+            },
+            "security": {
+                "allow_bash": False,
+                "allow_file_write": True,
+                "allow_file_edit": True,
+                "confirm_high_risk": True
+            },
+            "tools": {
+                "enabled": [
+                    "FileRead", 
+                    "FileWrite", 
+                    "FileEdit", 
+                    "Glob", 
+                    "Grep", 
+                    "Ls"
+                ]
+            }
+        }
 
     def plan_chat(self, history: list, verbose: bool = False):
         """Handles the interactive planning chat loop."""

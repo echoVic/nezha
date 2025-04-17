@@ -1,0 +1,23 @@
+llm:
+  provider: volcengine
+  api_key: 1ddfaee1-1350-46b0-ab87-2db988d24d4b
+  model: ep-20250417174840-6c94l
+  endpoint: https://ark.cn-beijing.volces.com/api/v3
+  temperature: 0.2
+  max_tokens: 2048
+security:
+  allow_bash: false
+  allow_file_write: true
+  allow_file_edit: true
+  confirm_high_risk: true
+tools:
+  enabled:
+  - FileRead
+  - FileWrite
+  - FileEdit
+  - Glob
+  - Grep
+  - Ls
+rules:
+  type: 
+  path:

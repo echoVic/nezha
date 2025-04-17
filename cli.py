@@ -2,8 +2,9 @@
 Typer CLI 定义
 """
 import os
+import yaml
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 try:
     from platformdirs import user_config_dir
@@ -15,6 +16,7 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.prompt import Prompt
 from rich.syntax import Syntax
 from rich.table import Table
 
@@ -23,8 +25,154 @@ from context_engine import ContextEngine
 from plan_command import PlanCommand
 from security import SecurityLevel, SecurityManager
 
-app = typer.Typer(help="nezha - AI 命令行代码助手")
+app = typer.Typer(
+    help="nezha - AI 命令行代码助手\n\n模型管理相关命令：\n  nezha models              查看所有模型并切换当前模型\n  nezha models add          添加新模型到配置文件\n  nezha models list         仅列出所有模型（只读）\n\n其他命令请用 nezha --help 查看。",
+    no_args_is_help=True,
+    add_completion=True,
+)
+
 console = Console()
+
+models_app = typer.Typer(help="模型管理相关命令")
+app.add_typer(models_app, name="models", help="模型管理相关命令")
+
+# 全局变量用于存储当前选择的模型
+CURRENT_MODEL = None
+
+# 预定义的模型列表
+PREDEFINED_MODELS = [
+    {
+        "id": "ep-20250417174840-6c94l",
+        "name": "火山引擎 - Doubao-1.5-pro-32k",
+        "provider": "volcengine",
+        "api_key": "1ddfaee1-1350-46b0-ab87-2db988d24d4b",
+        "endpoint": "https://ark.cn-beijing.volces.com/api/v3",
+    }
+]
+
+# 获取当前选择的模型
+def get_current_model():
+    """获取当前选择的模型配置。如果没有设置，返回 None。"""
+    global CURRENT_MODEL
+    return CURRENT_MODEL
+
+# 设置当前选择的模型
+def set_current_model(model):
+    """设置当前选择的模型配置。"""
+    global CURRENT_MODEL
+    CURRENT_MODEL = model
+
+@models_app.command("list")
+def list_models():
+    """仅列出所有模型（只读）"""
+    models(
+        set_model=False
+    )
+
+@models_app.command("add")
+def add_model():
+    """添加新模型到 config.yaml 的 models 列表"""
+    models_add()
+
+@models_app.command("__default__")
+def models(
+    set_model: bool = typer.Option(False, "--set", "-s", help="设置默认模型"),
+):
+    """列出可用的模型并允许用户选择"""
+    config_path = get_user_config_path()
+    config = {}
+    if config_path.exists():
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f) or {}
+    user_models = config.get("models", [])
+    current_model_id = config.get("llm", {}).get("model")
+
+    # 合并展示：预置模型 + 用户模型
+    all_models = PREDEFINED_MODELS + user_models
+
+    table = Table(title="可用的模型")
+    table.add_column("序号", style="cyan")
+    table.add_column("模型名称", style="green")
+    table.add_column("提供商", style="yellow")
+    table.add_column("模型 ID", style="blue")
+    table.add_column("API Key", style="dim")
+    table.add_column("来源", style="magenta")
+
+    for i, model in enumerate(all_models, start=1):
+        name = model.get('name') or model.get('id')
+        if model['id'] == current_model_id:
+            name = f"[bold]{name} [当前][/bold]"
+        source = "预置" if model in PREDEFINED_MODELS else "用户配置"
+        table.add_row(
+            str(i),
+            name,
+            model.get('provider', ''),
+            model.get('id', ''),
+            (model.get('api_key', '')[:6] + '...' if model.get('api_key') else ''),
+            source
+        )
+    console.print(Panel(table, title="nezha models", border_style="blue"))
+
+    if set_model:
+        if not all_models:
+            console.print("[red]未找到可用模型，请先在 config.yaml 中添加 models 列表！[/red]")
+            return
+        choice = Prompt.ask(
+            "\n请选择模型编号", 
+            choices=[str(i) for i in range(1, len(all_models) + 1)],
+            default="1"
+        )
+        selected_index = int(choice) - 1
+        selected_model = all_models[selected_index]
+        # 只更新 llm.model 字段
+        if "llm" not in config:
+            config["llm"] = {}
+        config["llm"]["model"] = selected_model["id"]
+        # 只有当选择的是用户模型时才写入 models
+        if selected_model not in PREDEFINED_MODELS:
+            # 如果 models 列表没有该用户模型则追加
+            if not any(m["id"] == selected_model["id"] for m in user_models):
+                user_models.append(selected_model)
+                config["models"] = user_models
+        with open(config_path, 'w', encoding='utf-8') as f:
+            yaml.dump(config, f, allow_unicode=True, sort_keys=False)
+        console.print(f"\n[green]成功设置模型: {selected_model.get('name', selected_model['id'])}[/green]")
+        console.print(f"[dim]配置文件已更新: {config_path}[/dim]")
+    else:
+        console.print("\n使用 'nezha models --set' 命令可以选择并设置默认模型")
+
+def models_add():
+    """添加新模型到 config.yaml 的 models 列表"""
+    config_path = get_user_config_path()
+    config = {}
+    if config_path.exists():
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f) or {}
+    user_models = config.get("models", [])
+
+    console.print("\n[bold cyan]添加新的模型配置[/bold cyan]")
+    model_id = Prompt.ask("模型 ID (唯一标识)")
+    name = Prompt.ask("模型名称", default=f"用户模型 - {model_id}")
+    provider = Prompt.ask("模型提供商", choices=["volcengine", "openai", "anthropic", "wenxin", "custom"], default="volcengine")
+    api_key = Prompt.ask("API Key")
+    endpoint = Prompt.ask("API Endpoint")
+
+    new_model = {
+        "id": model_id,
+        "name": name,
+        "provider": provider,
+        "api_key": api_key,
+        "endpoint": endpoint
+    }
+    # 检查是否已存在
+    if any(m["id"] == model_id for m in user_models):
+        console.print(f"[red]模型 ID '{model_id}' 已存在，不可重复添加！[/red]")
+        return
+    user_models.append(new_model)
+    config["models"] = user_models
+    with open(config_path, 'w', encoding='utf-8') as f:
+        yaml.dump(config, f, allow_unicode=True, sort_keys=False)
+    console.print(f"[green]模型 '{name}' 已添加到配置文件！[/green]")
 
 @app.command()
 def main(
@@ -282,28 +430,8 @@ def init(
     
     security_level = security_levels[security_level_idx - 1] if 0 < security_level_idx <= len(security_levels) else security_levels[1]
     
-    # 配置规则集
-    console.print("\n[bold]配置规则集[/bold]")
-    use_rules = typer.confirm("是否配置特定规则集?", default=False)
-    rules_config = {}
-    
-    if use_rules:
-        rule_types = ["windsurfrules", "cursorrules", "custom"]
-        rule_type_idx = typer.prompt(
-            "选择规则集类型", 
-            type=int, 
-            default=1, 
-            show_choices=False,
-            show_default=False,
-            prompt_suffix="\n1. windsurfrules\n2. cursorrules\n3. 自定义规则\n请选择 [1-3]: "
-        )
-        
-        rule_type = rule_types[rule_type_idx - 1] if 0 < rule_type_idx <= len(rule_types) else rule_types[0]
-        rules_config["type"] = rule_type
-        
-        if rule_type == "custom":
-            rules_path = typer.prompt("输入自定义规则文件路径")
-            rules_config["path"] = rules_path
+    # 仅生成 rules 占位，用户可在 config.yaml 自由填写规则内容
+    rules_config = None  # 用于后续写入空占位及注释
     
     # 生成配置文件
     import yaml
