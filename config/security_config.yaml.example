@@ -1,0 +1,26 @@
+# nezha 安全配置示例
+
+# 安全级别: strict(严格), normal(标准), relaxed(宽松), bypass(跳过确认)
+security_level: normal
+
+# 是否对所有确认自动回答是（危险！仅用于自动化脚本）
+yes_to_all: false
+
+# 允许操作的路径列表（为空表示不限制）
+# 路径可以是绝对路径或相对路径，支持~展开
+allowed_paths:
+  - ~/Documents/projects/  # 只允许在此目录下操作
+  # - ~/                   # 允许在用户目录下操作
+
+# 禁用的工具列表
+disabled_tools:
+  # - Bash                 # 禁用Shell命令执行
+  # - FileWrite            # 禁用文件写入
+  # - FileEdit             # 禁用文件编辑
+
+# 工具风险级别映射（参考，不可配置）
+# NONE: 无风险，如只读操作 (FileRead, Ls, Glob)
+# LOW: 低风险，如创建新文件
+# MEDIUM: 中等风险，如修改文件 (FileWrite, FileEdit)
+# HIGH: 高风险，如删除文件
+# CRITICAL: 极高风险，如执行Shell命令 (Bash)
