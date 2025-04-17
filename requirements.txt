@@ -1,0 +1,4 @@
+typer
+rich
+PyYAML
+openai>=1.0

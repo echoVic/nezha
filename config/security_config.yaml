@@ -1,0 +1,4 @@
+security_level: normal
+yes_to_all: false
+allowed_paths: []
+disabled_tools: []
