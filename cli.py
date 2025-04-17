@@ -45,7 +45,7 @@ PREDEFINED_MODELS = [
         "id": "ep-20250417174840-6c94l",
         "name": "火山引擎 - Doubao-1.5-pro-32k",
         "provider": "volcengine",
-        "api_key": "1ddfaee1-1350-46b0-ab87-2db988d24d4b",
+        "api_key": "****",
         "endpoint": "https://ark.cn-beijing.volces.com/api/v3",
     }
 ]
@@ -68,6 +68,16 @@ def list_models():
     models(
         set_model=False
     )
+
+@models_app.command("select")
+def select_model():
+    """交互式选择并设置默认模型（推荐使用）"""
+    from rich.console import Console
+    console = Console()
+    # 复用 models 逻辑，进入交互选择模式
+    from cli import models as models_func
+    models_func(set_model=True)
+
 
 @models_app.command("add")
 def add_model():
@@ -181,7 +191,8 @@ def main(
     yes: bool = typer.Option(False, "--yes", "-y", help="自动确认所有操作（谨慎使用）"),
     files: Optional[List[str]] = typer.Option(None, "--file", "-f", help="指定要包含在上下文中的文件"),
     security_level: int = typer.Option(2, "--security", "-s", help="安全级别设置"),
-    config_file: Optional[Path] = typer.Option(None, "--config", help="配置文件路径")
+    config_file: Optional[Path] = typer.Option(None, "--config", help="配置文件路径"),
+    api_key: Optional[str] = typer.Option(None, "--api-key", help="通过命令行注入大模型 API Key，优先级高于配置文件和环境变量")
 ):
     """nezha 主命令入口 - 执行用户给出的任务指令"""
     # 默认读取用户级别配置
@@ -198,7 +209,7 @@ def main(
     context_engine = ContextEngine(working_dir=os.getcwd())
     
     # 初始化Agent
-    agent = NezhaAgent(security_manager=security_manager, config_file=config_file)
+    agent = NezhaAgent(security_manager=security_manager, config_file=config_file, api_key=api_key)
     
     # 显示进度
     with Progress(
@@ -251,7 +262,8 @@ def plan(
     initial_requirement: str = typer.Argument(..., help="初始需求描述"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="显示详细执行信息"),
     output_file: Optional[Path] = typer.Option(None, "--output", "-o", help="输出计划文档的文件路径"),
-    config_file: Optional[Path] = typer.Option(None, "--config", help="配置文件路径")
+    config_file: Optional[Path] = typer.Option(None, "--config", help="配置文件路径"),
+    api_key: Optional[str] = typer.Option(None, "--api-key", help="通过命令行注入大模型 API Key，优先级高于配置文件和环境变量")
 ):
     """nezha 规划命令入口 - 通过交互式对话生成任务计划"""
     # 显示开始规划的信息
@@ -269,7 +281,7 @@ def plan(
         context_engine = ContextEngine(working_dir=os.getcwd()) 
         
         # 初始化Agent
-        agent = NezhaAgent(security_manager=security_manager, config_file=config_file)
+        agent = NezhaAgent(security_manager=security_manager, config_file=config_file, api_key=api_key)
 
         # 显示进度
         with Progress(
@@ -337,7 +349,10 @@ def init(
     ),
     security_config: Optional[Path] = typer.Option(
         None, "--security-config", "-s", help="安全配置文件路径，默认写入用户目录 ~/.config/nezha/security_config.yaml"
-    )
+    ),
+    api_key: Optional[str] = typer.Option(
+        None, "--api-key", help="通过命令行注入大模型 API Key，优先级高于配置文件和环境变量"
+    ),
 ):
     """nezha 初始化命令 - 配置大模型接口、token和规则集"""
     # 兼容老参数，优先命令行参数，否则用标准目录
@@ -483,7 +498,8 @@ def init(
 def chat(
     initial_message: Optional[str] = typer.Argument(None, help="初始对话消息"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="显示详细执行信息"),
-    config_file: Optional[Path] = typer.Option(None, "--config", help="配置文件路径")
+    config_file: Optional[Path] = typer.Option(None, "--config", help="配置文件路径"),
+    api_key: Optional[str] = typer.Option(None, "--api-key", help="通过命令行注入大模型 API Key，优先级高于配置文件和环境变量")
 ):
     """nezha 对话命令 - 与AI助手进行交互式对话"""
     # 默认读取用户级别配置
@@ -502,7 +518,7 @@ def chat(
         security_manager = SecurityManager(security_level) 
         
         # 初始化Agent
-        agent = NezhaAgent(security_manager=security_manager, config_file=config_file)
+        agent = NezhaAgent(security_manager=security_manager, config_file=config_file, api_key=api_key)
 
         # 导入ChatCommand
         from chat_command import ChatCommand

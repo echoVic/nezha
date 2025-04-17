@@ -1,6 +1,6 @@
 llm:
   provider: volcengine
-  api_key: 1ddfaee1-1350-46b0-ab87-2db988d24d4b
+  api_key: "****"
   model: ep-20250417174840-6c94l
   endpoint: https://ark.cn-beijing.volces.com/api/v3
   temperature: 0.2
