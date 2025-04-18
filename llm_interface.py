@@ -11,6 +11,41 @@ except ImportError:
     OpenAIError = None # type: ignore
 
 
+import os
+from abc import ABC, abstractmethod
+from typing import Any, Dict, Optional
+import yaml
+
+# 工具描述自动注入
+from tool_registry import ToolRegistry, run_tool
+import json
+
+def get_all_tool_descriptions() -> str:
+    """
+    自动收集所有注册工具的描述信息，拼接为 prompt 注入字符串。
+    """
+    registry = ToolRegistry()
+    descs = []
+    for tool in registry.tools.values():
+        descs.append(f"工具名: {tool.name}\n用途: {getattr(tool, 'description', '')}\n参数: {getattr(tool, 'arguments', {})}\n")
+    return "\n".join(descs)
+
+def parse_llm_tool_call(llm_output: str):
+    """
+    尝试解析 LLM 输出的结构化工具调用意图（JSON 格式）。
+    成功则自动调用工具并返回结果，否则返回 None。
+    """
+    try:
+        data = json.loads(llm_output)
+        if "tool_call" in data:
+            tool_name = data["tool_call"].get("tool_name")
+            args = data["tool_call"].get("args", {})
+            result = run_tool(tool_name, args)
+            return f"[工具 {tool_name} 调用结果]\n{result}"
+    except Exception:
+        pass
+    return None
+
 class LLMInterfaceBase(ABC):
     """
     LLM API 抽象基类，定义通用接口。

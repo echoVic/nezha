@@ -1,5 +1,6 @@
-from typing import List, Optional
-
+from rich.markdown import Markdown
+from rich.panel import Panel
+from cli import console
 
 class ChatCommand:
     def __init__(self, agent, verbose: bool = False):
@@ -10,7 +11,7 @@ class ChatCommand:
     def add_message(self, role: str, content: str):
         self.history.append({"role": role, "content": content})
         if self.verbose:
-            prefix = "[用户]" if role == "user" else "[AI]"
+            prefix = "[用户]" if role == "user" else "[nezha]"
             # print(f"{prefix}: {content}")
 
     def interactive_loop(self, initial_message: str = None):
@@ -29,7 +30,7 @@ class ChatCommand:
             try:
                 response = self.agent.plan_chat(self.history, self.verbose)
                 self.add_message("assistant", response)
-                print(f"\n[AI]: {response}")
+                console.print(Panel(Markdown(response), title="nezha", border_style="cyan"))
             except Exception as e:
                 print(f"\n[错误] 对话处理出错: {e}")
                 if self.verbose:
