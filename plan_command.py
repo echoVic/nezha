@@ -37,17 +37,19 @@ class PlanCommand:
         for idx, section in enumerate(plan_sections, 1):
             markdown += f"## 步骤{idx}\n{section}\n\n"
         if self.verbose:
-            print("\n最终计划Markdown:\n", markdown)
+            # print("\n最终计划Markdown:\n", markdown)
+            pass
         return markdown
 
     def save_plan(self, markdown: str):
         with open(self.output_file, "w", encoding="utf-8") as f:
             f.write(markdown)
         if self.verbose:
-            print(f"计划已保存到: {self.output_file}")
+            # print(f"计划已保存到: {self.output_file}")
+            pass
 
-    def run(self, initial_requirement: str):
+    def run(self, initial_requirement: str):        
         markdown = self.interactive_loop(initial_requirement)
         self.save_plan(markdown)
-        print(f"\n规划已完成，计划文档输出至: {self.output_file}")
+        # print(f"\n规划已完成，计划文档输出至: {self.output_file}")
         return markdown

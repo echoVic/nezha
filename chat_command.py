@@ -11,7 +11,7 @@ class ChatCommand:
         self.history.append({"role": role, "content": content})
         if self.verbose:
             prefix = "[用户]" if role == "user" else "[AI]"
-            print(f"{prefix}: {content}")
+            # print(f"{prefix}: {content}")
 
     def interactive_loop(self, initial_message: str = None):
         """处理交互式对话循环"""
@@ -44,14 +44,14 @@ class ChatCommand:
 
     def run(self, initial_message: str = None):
         """运行对话命令"""
-        print("\n开始与AI助手对话，输入'exit'可随时退出\n")
+        # print("\n开始与AI助手对话，输入'exit'可随时退出\n")
         try:
             self.interactive_loop(initial_message)
-            print("\n对话已结束")
+            # print("\n对话已结束")
         except KeyboardInterrupt:
-            print("\n对话被用户中断")
+            pass
         except Exception as e:
-            print(f"\n对话过程中发生错误: {e}")
+            # print(f"\n对话过程中发生错误: {e}")
             if self.verbose:
                 import traceback
                 traceback.print_exc()

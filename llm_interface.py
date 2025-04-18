@@ -113,18 +113,18 @@ class VolcEngineLLM(LLMInterfaceBase):
         base_url = self.api_base or self.DEFAULT_BASE_URL
         if base_url.endswith('/'):
             base_url = base_url[:-1]
-            print(f"\n注意: 移除 API 端点末尾斜杠，使用: {base_url}")
+            # print(f"\n注意: 移除 API 端点末尾斜杠，使用: {base_url}")
         
         # 打印调试信息
-        print(f"\n初始化火山引擎客户端:")
-        print(f"- API 端点: {base_url}")
-        print(f"- 模型 ID: {self.model}")
-        print(f"- API 密钥: {api_key[:4]}...{api_key[-4:] if api_key and len(api_key) > 8 else ''}")
-        print(f"- 环境变量 ARK_API_KEY: {'已设置' if os.environ.get('ARK_API_KEY') else '未设置'}")
+        # print(f"\n初始化火山引擎客户端:")
+        # print(f"- API 端点: {base_url}")
+        # print(f"- 模型 ID: {self.model}")
+        # print(f"- API 密钥: {api_key[:4]}...{api_key[-4:] if api_key and len(api_key) > 8 else ''}")
+        # print(f"- 环境变量 ARK_API_KEY: {'已设置' if os.environ.get('ARK_API_KEY') else '未设置'}")
         
         # 初始化客户端，不进行测试连接
         # 火山引擎不支持 /models 路径，不能使用 models.list() 进行测试
-        print("\n初始化火山引擎客户端...")
+        # print("\n初始化火山引擎客户端...")
         
         try:
             # 直接初始化客户端，不进行测试连接
@@ -132,19 +132,19 @@ class VolcEngineLLM(LLMInterfaceBase):
                 base_url=base_url,
                 api_key=api_key
             )
-            print("客户端初始化成功!")
+            # print("客户端初始化成功!")
             
             # 设置环境变量，以防其他地方需要
             if not os.environ.get("ARK_API_KEY"):
                 os.environ["ARK_API_KEY"] = api_key
-                print(f"已设置环境变量 ARK_API_KEY={api_key[:4]}...{api_key[-4:] if api_key and len(api_key) > 8 else ''}")
+                # print(f"已设置环境变量 ARK_API_KEY={api_key[:4]}...{api_key[-4:] if api_key and len(api_key) > 8 else ''}")
         except Exception as e:
-            print(f"\n初始化客户端时出错: {e}")
-            print(f"错误类型: {type(e).__name__}")
-        
+            # print(f"\n初始化客户端时出错: {e}")
+            # print(f"错误类型: {type(e).__name__}")
+            pass
         # 模型 ID 是必须的
         if not self.model:
-             raise ValueError("未在配置中指定火山引擎模型 (model)。")
+            raise ValueError("未在配置中指定火山引擎模型 (model)。")
 
     def generate(self, prompt: str, **kwargs) -> str:
         # 使用 chat 接口模拟 generate
@@ -153,21 +153,21 @@ class VolcEngineLLM(LLMInterfaceBase):
 
     def chat(self, messages: list, **kwargs) -> str:
         try:
-            print(f"\n--- 火山引擎调用信息 ---")
-            print(f"模型ID: {self.model}")
-            print(f"API端点: {self.client.base_url}")
-            print(f"API密钥: {self.api_key[:4]}...{self.api_key[-4:] if self.api_key and len(self.api_key) > 8 else ''}")
-            print(f"消息数量: {len(messages)}")
-            print(f"消息内容示例: {messages[0]['content'][:30]}..." if messages and len(messages) > 0 and 'content' in messages[0] else "无消息内容")
+            # print(f"\n--- 火山引擎调用信息 ---")
+            # print(f"模型ID: {self.model}")
+            # print(f"API端点: {self.client.base_url}")
+            # print(f"API密钥: {self.api_key[:4]}...{self.api_key[-4:] if self.api_key and len(self.api_key) > 8 else ''}")
+            # print(f"消息数量: {len(messages)}")
+            # print(f"消息内容示例: {messages[0]['content'][:30]}..." if messages and len(messages) > 0 and 'content' in messages[0] else "无消息内容")
             
             # 参数简化，与测试脚本保持一致
             max_tokens = kwargs.get("max_tokens", self.config.get("max_tokens", 500))
             temperature = kwargs.get("temperature", self.config.get("temperature", 0.7))
             
-            print(f"参数: max_tokens={max_tokens}, temperature={temperature}")
+            # print(f"参数: max_tokens={max_tokens}, temperature={temperature}")
             
             # 简化请求，去除不必要的参数
-            print("\n发送纯文本请求...")
+            # print("\n发送纯文本请求...")
             completion = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
@@ -176,48 +176,50 @@ class VolcEngineLLM(LLMInterfaceBase):
                 # 去除其他可能引起问题的参数
             )
             
-            print("\n成功收到响应!")
+            # print("\n成功收到响应!")
             
             # 处理响应
             if hasattr(completion, "choices") and completion.choices and len(completion.choices) > 0:
                 content = completion.choices[0].message.content.strip()
-                print(f"响应内容开头: {content[:50]}...")
+                # print(f"响应内容开头: {content[:50]}...")
                 return content
             else:
-                print("警告: 收到意外的火山引擎响应格式。")
-                print(f"响应内容: {completion}")
+                # print("警告: 收到意外的火山引擎响应格式。")
+                # print(f"响应内容: {completion}")
                 return "无法获取响应内容"
                 
         except OpenAIError as e:
             # 详细的错误信息
-            print(f"\n--- 火山引擎API错误 ---")
-            print(f"错误类型: {type(e).__name__}")
-            print(f"错误信息: {str(e)}")
+            # print(f"\n--- 火山引擎API错误 ---")
+            # print(f"错误类型: {type(e).__name__}")
+            # print(f"错误信息: {str(e)}")
             
             # 尝试提取更多错误信息
             if hasattr(e, 'response') and hasattr(e.response, 'text'):
                 try:
                     import json
                     error_detail = json.loads(e.response.text)
-                    print(f"错误详情: {json.dumps(error_detail, indent=2, ensure_ascii=False)}")
+                    # print(f"错误详情: {json.dumps(error_detail, indent=2, ensure_ascii=False)}")
                 except:
-                    print(f"原始错误响应: {e.response.text}")
-            
+                    # print(f"原始错误响应: {e.response.text}")
+                    pass
             # 网络连接错误的特殊处理
             if "Connection error" in str(e):
-                print("\n可能的原因:")
-                print("1. 网络连接问题 - 无法连接到火山引擎API服务器")
-                print("2. API端点错误 - 配置中的endpoint可能有误")
-                print("3. 防火墙/代理问题 - 网络环境限制了对外部API的访问")
-                print("4. API服务不可用 - 火山引擎服务可能暂时不可用")
+                # print("\n可能的原因:")
+                # print("1. 网络连接问题 - 无法连接到火山引擎API服务器")
+                # print("2. API端点错误 - 配置中的endpoint可能有误")
+                # print("3. 防火墙/代理问题 - 网络环境限制了对外部API的访问")
+                # print("4. API服务不可用 - 火山引擎服务可能暂时不可用")
+                pass
             
             return f"Error: {str(e)}"
             
         except Exception as e:
-            print(f"\n--- 火山引擎调用过程中发生意外错误 ---")
-            print(f"错误类型: {type(e).__name__}")
-            print(f"错误信息: {str(e)}")
+            # print(f"\n--- 火山引擎调用过程中发生意外错误 ---")
+            # print(f"错误类型: {type(e).__name__}")
+            # print(f"错误信息: {str(e)}")
             return f"Unexpected error: {str(e)}"
+
 
 
 # 预留：Anthropic、其他 LLM 子类可类似扩展

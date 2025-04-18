@@ -130,10 +130,10 @@ class NezhaAgent:
         try:
             # Directly use the history provided by PlanCommand
             response = self.llm_interface.chat(history)
-            if verbose:
-                print("\n--- LLM Response ---")
-                print(response)
-                print("--------------------")
+            # if verbose:
+            #     print("\n--- LLM Response ---")
+            #     print(response)
+            #     print("--------------------")
             return response
         except Exception as e:
             print(f"Error during LLM call in plan_chat: {e}")
@@ -163,12 +163,12 @@ class NezhaAgent:
                 {"role": "user", "content": full_prompt}
             ]
             response = self.llm_interface.chat(messages)
-            if verbose:
-                print("\n--- LLM Response ---")
-                print(response)
-                print("--------------------")
+            # if verbose:
+            #     print("\n--- LLM Response ---")
+            #     print(response)
+            #     print("--------------------")
             return response
         except Exception as e:
             # TODO: More specific error handling
-            print(f"Error during LLM call: {e}")
+            # print(f"Error during LLM call: {e}")
             return f"Error executing prompt: {e}"

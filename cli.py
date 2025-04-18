@@ -366,19 +366,11 @@ def init(
     llm_config = {}
     console.print("\n[bold]配置大模型接口[/bold]")
     
-    # 选择LLM提供商
-    providers = ["openai", "azure", "anthropic", "wenxin", "tongyi", "zhipuai", "volcengine", "other"]
-    provider_idx = typer.prompt(
-        "选择大模型提供商", 
-        type=int, 
-        default=1, 
-        show_choices=False,
-        show_default=False,
-        prompt_suffix="\n1. OpenAI\n2. Azure OpenAI\n3. Anthropic\n4. 百度文心 (Wenxin)\n5. 阿里通义 (Tongyi)\n6. 智谱AI (ZhipuAI)\n7. 火山引擎 (VolcEngine)\n8. 其他\n请选择 [1-8]: "
-    )
-    
-    provider = providers[provider_idx - 1] if 0 < provider_idx <= len(providers) else providers[0]
+    # 只允许火山引擎，其他模型后续支持
+    console.print("\n[bold yellow]当前仅支持火山引擎 (VolcEngine)，其他模型将在后续版本开放。[/bold yellow]")
+    provider = "volcengine"
     llm_config["provider"] = provider
+    # TODO: 未来支持其他模型时，恢复多模型选择逻辑
     
     # 配置API密钥
     # 对火山引擎特殊处理提示，因为密钥通常来自环境变量
