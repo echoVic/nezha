@@ -2,11 +2,11 @@
 工具注册与调用
 """
 
-from tools.file_io import FileRead, FileWrite, FileEdit
-from tools.navigation import Ls
-from tools.search import Glob, Grep
-from tools.shell import Bash
-from tools.git_tools import GitStatus, GitLog, GitDiff, GitBranch, GitPull, GitPush
+from src.tools.file_io import FileRead, FileWrite, FileEdit
+from src.tools.navigation import Ls
+from src.tools.search import Glob, Grep
+from src.tools.shell import Bash
+from src.tools.git_tools import GitStatus, GitLog, GitDiff, GitBranch, GitPull, GitPush
 
 class ToolRegistry:
     def __init__(self):

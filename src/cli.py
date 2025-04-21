@@ -37,10 +37,10 @@ from rich.prompt import Prompt
 from rich.syntax import Syntax
 from rich.table import Table
 
-from agent import NezhaAgent
-from context_engine import ContextEngine
-from plan_command import PlanCommand
-from security import SecurityLevel, SecurityManager
+from .agent import NezhaAgent
+from .context_engine import ContextEngine
+from .plan_command import PlanCommand
+from .security import SecurityLevel, SecurityManager
 
 app = typer.Typer(
     help="nezha - AI 命令行代码助手\n\n模型管理相关命令：\n  nezha models              查看所有模型并切换当前模型\n  nezha models add          添加新模型到配置文件\n  nezha models list         仅列出所有模型（只读）\n\n其他命令请用 nezha --help 查看。",
@@ -92,8 +92,8 @@ def select_model():
     from rich.console import Console
     console = Console()
     # 复用 models 逻辑，进入交互选择模式
-    from cli import models as models_func
-    models_func(set_model=True)
+    # The import 'from cli import models as models_func' is removed as 'models' is defined in the same file.
+    models(set_model=True)
 
 
 @models_app.command("add")
@@ -240,7 +240,7 @@ def main(
         context = context_engine.collect(user_files=files)
         
         # ===== 自动注入工具描述，构造 LLM prompt =====
-        from llm_interface import get_all_tool_descriptions, parse_llm_tool_call, get_llm_interface
+        from .llm_interface import get_all_tool_descriptions, parse_llm_tool_call, get_llm_interface
         tool_desc = get_all_tool_descriptions()
         llm_prompt = (
             "你可以调用如下工具来帮助用户完成任务。\n\n"
@@ -333,29 +333,29 @@ def plan(
             progress.add_task("收集中", total=None)
             context = context_engine.collect()
             
-        # ===== 自动注入工具描述，构造 LLM prompt =====
-        from llm_interface import get_all_tool_descriptions, parse_llm_tool_call, get_llm_interface
-        tool_desc = get_all_tool_descriptions()
-        llm_prompt = (
-            "你可以调用如下工具来帮助用户完成任务。\n\n"
-            f"{tool_desc}\n"
-            "请根据用户输入，判断是否需要调用工具。如果需要，请输出如下结构化 JSON：\n"
-            '{"tool_call": {"tool_name": "...", "args": {...}}}'
-            "如果不需要调用工具，请直接输出你的自然语言回复。\n\n"
-            f"用户输入：{initial_requirement}\n"
-        )
-        import yaml
-        config = {}
-        if config_file and Path(config_file).exists():
-            with open(config_file, "r", encoding="utf-8") as f:
-                config = yaml.safe_load(f) or {}
-        llm_config = merge_llm_config(config)
-        llm = get_llm_interface(llm_config)
-        llm_output = llm.generate(llm_prompt)
-        tool_result = parse_llm_tool_call(llm_output)
-        if tool_result is not None:
-            console.print(Panel(tool_result, title="工具自动调用", border_style="green"))
-            return
+        # # ===== 自动注入工具描述，构造 LLM prompt =====
+        # from llm_interface import get_all_tool_descriptions, parse_llm_tool_call, get_llm_interface
+        # tool_desc = get_all_tool_descriptions()
+        # llm_prompt = (
+        #     "你可以调用如下工具来帮助用户完成任务。\n\n"
+        #     f"{tool_desc}\n"
+        #     "请根据用户输入，判断是否需要调用工具。如果需要，请输出如下结构化 JSON：\n"
+        #     '{"tool_call": {"tool_name": "...", "args": {...}}}'
+        #     "如果不需要调用工具，请直接输出你的自然语言回复。\n\n"
+        #     f"用户输入：{initial_requirement}\n"
+        # )
+        # import yaml
+        # config = {}
+        # if config_file and Path(config_file).exists():
+        #     with open(config_file, "r", encoding="utf-8") as f:
+        #         config = yaml.safe_load(f) or {}
+        # llm_config = merge_llm_config(config)
+        # llm = get_llm_interface(llm_config)
+        # llm_output = llm.generate(llm_prompt)
+        # tool_result = parse_llm_tool_call(llm_output)
+        # if tool_result is not None:
+        #     console.print(Panel(tool_result, title="工具自动调用", border_style="green"))
+        #     return
         # ========== 原有流程 ===========
         # 初始化规划命令
         planner = PlanCommand(
@@ -566,45 +566,20 @@ def chat(
     console.print(Panel("[bold]开始与AI助手对话[/bold]", title="nezha chat", border_style="blue"))
     
     try:
-        # ===== 自动注入工具描述，构造 LLM prompt =====
-        from llm_interface import get_all_tool_descriptions, parse_llm_tool_call, get_llm_interface
-        tool_desc = get_all_tool_descriptions()
-        user_input = initial_message or ""
-        llm_prompt = (
-            "你可以调用如下工具来帮助用户完成任务。\n\n"
-            f"{tool_desc}\n"
-            "请根据用户输入，判断是否需要调用工具。如果需要，请输出如下结构化 JSON：\n"
-            '{"tool_call": {"tool_name": "...", "args": {...}}}'
-            "如果不需要调用工具，请直接输出你的自然语言回复。\n\n"
-            f"用户输入：{user_input}\n"
+        # ========== 启用多轮对话流程 ===========
+        # 初始化安全管理器和 Agent
+        # TODO: Consider loading security level from config if needed
+        security_level = SecurityLevel.NORMAL 
+        security_manager = SecurityManager(security_level)
+        agent = NezhaAgent(security_manager=security_manager, config_file=config_file, api_key=api_key)
+        
+        # 导入并运行 ChatCommand
+        from .chat_command import ChatCommand
+        chat_cmd = ChatCommand(
+            agent=agent,
+            verbose=verbose
         )
-        import yaml
-        config = {}
-        if config_file and Path(config_file).exists():
-            with open(config_file, "r", encoding="utf-8") as f:
-                config = yaml.safe_load(f) or {}
-        llm_config = merge_llm_config(config)
-        llm = get_llm_interface(llm_config)
-        llm_output = llm.generate(llm_prompt)
-        tool_result = parse_llm_tool_call(llm_output)
-        if tool_result is not None:
-            console.print(Panel(tool_result, title="工具自动调用", border_style="green"))
-            return
-        # ========== 若无工具调用，直接输出 LLM 回复 ==========
-        console.print(Panel(llm_output, title="AI回复", border_style="blue"))
-        return
-        # ========== 原有流程（如需保留多轮对话/上下文，可放到 else 分支） ===========
-        # security_level = SecurityLevel.NORMAL
-        # if config_file and config_file.exists():
-        #     pass
-        # security_manager = SecurityManager(security_level) 
-        # agent = NezhaAgent(security_manager=security_manager, config_file=config_file, api_key=api_key)
-        # from chat_command import ChatCommand
-        # chat_cmd = ChatCommand(
-        #     agent=agent,
-        #     verbose=verbose
-        # )
-        # chat_cmd.run(initial_message)
+        chat_cmd.run(initial_message)
         
     except Exception as e:
         console.print(Panel(f"[bold]执行对话时出错:[/bold] {e}", title="错误", border_style="red"))

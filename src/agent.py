@@ -7,14 +7,14 @@ from typing import Any, Dict, Optional
 
 import yaml
 
-from context_engine import \
+from src.context_engine import \
     ContextEngine  # Assuming ContextEngine provides context format
-from llm_interface import LLMInterfaceBase, get_llm_interface
-from security import SecurityManager
+from src.llm_interface import LLMInterfaceBase, get_llm_interface
+from src.security import SecurityManager
 
 # 导入获取当前模型的函数
 try:
-    from cli import get_current_model
+    from src.cli import get_current_model
 except ImportError:
     # 如果无法导入，定义一个空函数
     def get_current_model():
@@ -49,7 +49,7 @@ class NezhaAgent:
             user_models = self.config.get("models", [])
             # 延迟导入 PREDEFINED_MODELS，避免循环引用
             try:
-                from cli import PREDEFINED_MODELS
+                from src.cli import PREDEFINED_MODELS
             except ImportError:
                 PREDEFINED_MODELS = []
             all_models = PREDEFINED_MODELS + user_models

@@ -17,7 +17,7 @@ from typing import Any, Dict, Optional
 import yaml
 
 # 工具描述自动注入
-from tool_registry import ToolRegistry, run_tool
+from src.tool_registry import ToolRegistry, run_tool
 import json
 
 def get_all_tool_descriptions() -> str:

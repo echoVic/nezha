@@ -1,6 +1,7 @@
 from rich.markdown import Markdown
 from rich.panel import Panel
-from cli import console
+from rich.progress import Progress, SpinnerColumn, TextColumn # Add this import
+from src.cli import console
 
 class ChatCommand:
     def __init__(self, agent, verbose: bool = False):
@@ -28,7 +29,16 @@ class ChatCommand:
             
             # 调用agent处理对话
             try:
-                response = self.agent.plan_chat(self.history, self.verbose)
+                # Add loading indicator
+                with Progress(
+                    SpinnerColumn(),
+                    TextColumn("[progress.description]{task.description}"),
+                    transient=True, # Remove progress display on completion
+                    console=console # Use the same console
+                ) as progress:
+                    progress.add_task(description="思考中...", total=None) # Indeterminate task
+                    response = self.agent.plan_chat(self.history, self.verbose)
+                
                 self.add_message("assistant", response)
                 console.print(Panel(Markdown(response), title="nezha", border_style="cyan"))
             except Exception as e:
