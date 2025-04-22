@@ -9,6 +9,7 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: pypi # Add this line to match PyPI trusted publisher config
     permissions:
       # IMPORTANT: this permission is mandatory for trusted publishing
       id-token: write
