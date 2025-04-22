@@ -28,17 +28,5 @@ jobs:
       run: python -m build
     - name: Publish package to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
-      with:
-        # Use PyPI API token stored in GitHub secrets
-        # Go to your repository's settings > Secrets and variables > Actions > New repository secret
-        # Name: PYPI_API_TOKEN
-        # Value: Your PyPI API token (pypi-...)
-        # Alternatively, use trusted publishing (recommended)
-        # See: https://docs.pypi.org/trusted-publishers/
-        # If using trusted publishing, remove the 'password' field below
-        # password: ${{ secrets.PYPI_API_TOKEN }}
-        # For trusted publishing, configure PyPI first, then this action will use OIDC.
-        # Ensure your PyPI project is configured for trusted publishing with GitHub Actions.
-        # The 'id-token: write' permission above is required for trusted publishing.
-        # If not using trusted publishing, uncomment the 'password' line and comment out the permission.
-        # repository_url: https://test.pypi.org/legacy/ # Uncomment for TestPyPI
+      # Trusted publishing is configured via permissions (id-token: write)
+      # No 'with' parameters needed for standard PyPI publishing.
