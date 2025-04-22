@@ -1,8 +1,10 @@
-"""\n安全工具集成示例 - 展示如何将安全层与工具系统集成\n"""
+"""
+安全工具集成示例 - 展示如何将安全层与工具系统集成
+"""
 
 from typing import Any, Dict, Optional
 
-from ..security import SecurityLevel, ToolRiskLevel, security_manager
+from nezha_agent.security import SecurityLevel, ToolRiskLevel, security_manager
 from .base import BaseTool
 from .file_io import FileEdit, FileWrite
 from .shell import Bash

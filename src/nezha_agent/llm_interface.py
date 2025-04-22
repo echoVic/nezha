@@ -1,6 +1,7 @@
 import os
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
+import json
 
 import yaml
 
@@ -10,15 +11,8 @@ except ImportError:
     OpenAI = None # type: ignore
     OpenAIError = None # type: ignore
 
-
-import os
-from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
-import yaml
-
 # 工具描述自动注入
-from src.tool_registry import ToolRegistry, run_tool
-import json
+from .tool_registry import ToolRegistry, run_tool
 
 def get_all_tool_descriptions() -> str:
     """
@@ -42,8 +36,14 @@ def parse_llm_tool_call(llm_output: str):
             args = data["tool_call"].get("args", {})
             result = run_tool(tool_name, args)
             return f"[工具 {tool_name} 调用结果]\n{result}"
-    except Exception:
-        pass
+    except (json.JSONDecodeError, KeyError, TypeError) as error:
+        # 处理特定的异常类型
+        if isinstance(error, json.JSONDecodeError):
+            # JSON 解析错误
+            pass
+        elif isinstance(error, (KeyError, TypeError)):
+            # 数据结构或类型错误
+            pass
     return None
 
 class LLMInterfaceBase(ABC):
@@ -125,9 +125,32 @@ class OpenAILLM(LLMInterfaceBase):
             else:
                 return completion.choices[0].message.content.strip()
         except OpenAIError as e:
-            # TODO: Add more specific error handling
-            print(f"OpenAI API error: {e}")
-            raise
+            # 处理 OpenAI API 错误
+            error_msg = str(e)
+            if "connect" in error_msg.lower() or "connection" in error_msg.lower() or "timeout" in error_msg.lower():
+                import requests
+                # 尝试检测更具体的网络问题
+                try:
+                    # 测试基本网络连接
+                    requests.get("https://www.baidu.com", timeout=5)
+                    # 如果基本网络正常，可能是API端点问题
+                    return (f"Error: Connection error. 无法连接到API服务器({self.api_base})。请检查:\n"
+                            f"1. API端点配置是否正确\n"
+                            f"2. 网络是否可以访问该API服务器\n"
+                            f"3. API密钥是否正确配置")
+                except requests.exceptions.RequestException:
+                    # 基本网络连接也有问题
+                    return "Error: Connection error. 网络连接异常，请检查您的网络连接是否正常。"
+            elif "key" in error_msg.lower() or "auth" in error_msg.lower():
+                api_key_preview = self.api_key[:5] + "..." if self.api_key else "未设置"
+                return (f"Error: API key error. API密钥认证失败。请检查:\n"
+                        f"1. API密钥({api_key_preview})是否正确\n"
+                        f"2. 该密钥是否有权限访问模型({self.model})")
+            else:
+                return f"Error: {error_msg}"
+        except Exception as e:
+            # 处理其他未预期的错误
+            return f"Error: Unexpected error: {str(e)}"
 
 # 火山引擎 LLM 接口 (使用 OpenAI SDK)
 class VolcEngineLLM(LLMInterfaceBase):
@@ -148,35 +171,36 @@ class VolcEngineLLM(LLMInterfaceBase):
         base_url = self.api_base or self.DEFAULT_BASE_URL
         if base_url.endswith('/'):
             base_url = base_url[:-1]
-            # print(f"\n注意: 移除 API 端点末尾斜杠，使用: {base_url}")
         
-        # 打印调试信息
-        # print(f"\n初始化火山引擎客户端:")
-        # print(f"- API 端点: {base_url}")
-        # print(f"- 模型 ID: {self.model}")
-        # print(f"- API 密钥: {api_key[:4]}...{api_key[-4:] if api_key and len(api_key) > 8 else ''}")
-        # print(f"- 环境变量 ARK_API_KEY: {'已设置' if os.environ.get('ARK_API_KEY') else '未设置'}")
+        # 禁用 SSL 证书验证（仅用于测试）
+        self.verify_ssl = self.config.get("verify_ssl", True)
         
-        # 初始化客户端，不进行测试连接
-        # 火山引擎不支持 /models 路径，不能使用 models.list() 进行测试
-        # print("\n初始化火山引擎客户端...")
-        
+        # 初始化客户端
         try:
-            # 直接初始化客户端，不进行测试连接
+            import urllib3
+            if not self.verify_ssl:
+                # 禁用 SSL 证书验证的警告
+                urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+                print("\n警告: SSL 证书验证已禁用，仅用于测试环境。生产环境请启用 SSL 验证。")
+            
+            # 创建 OpenAI 客户端
+            import httpx
             self.client = OpenAI(
                 base_url=base_url,
-                api_key=api_key
+                api_key=api_key,
+                # 添加自定义 httpx 客户端以支持禁用 SSL 验证
+                http_client=httpx.Client(verify=self.verify_ssl)
             )
-            # print("客户端初始化成功!")
             
             # 设置环境变量，以防其他地方需要
             if not os.environ.get("ARK_API_KEY"):
-                os.environ["ARK_API_KEY"] = api_key
-                # print(f"已设置环境变量 ARK_API_KEY={api_key[:4]}...{api_key[-4:] if api_key and len(api_key) > 8 else ''}")
+                try:
+                    os.environ["ARK_API_KEY"] = api_key
+                except (TypeError, ValueError):
+                    pass
         except Exception as e:
-            # print(f"\n初始化客户端时出错: {e}")
-            # print(f"错误类型: {type(e).__name__}")
-            pass
+            print(f"\n初始化客户端失败: {e}")
+        
         # 模型 ID 是必须的
         if not self.model:
             raise ValueError("未在配置中指定火山引擎模型 (model)。")
@@ -188,58 +212,20 @@ class VolcEngineLLM(LLMInterfaceBase):
 
     def chat(self, messages: list, **kwargs) -> str:
         try:
-            # print(f"\n--- 火山引擎调用信息 ---")
-            # print(f"模型ID: {self.model}")
-            # print(f"API端点: {self.client.base_url}")
-            # print(f"API密钥: {self.api_key[:4]}...{self.api_key[-4:] if self.api_key and len(self.api_key) > 8 else ''}")
-            # print(f"消息数量: {len(messages)}")
-            # print(f"消息内容示例: {messages[0]['content'][:30]}..." if messages and len(messages) > 0 and 'content' in messages[0] else "无消息内容")
-            
-            # 参数简化，与测试脚本保持一致
-            max_tokens = kwargs.get("max_tokens", self.config.get("max_tokens", 500))
-            temperature = kwargs.get("temperature", self.config.get("temperature", 0.7))
-            
-            # print(f"参数: max_tokens={max_tokens}, temperature={temperature}")
-            
-            # 简化请求，去除不必要的参数
-            # print("\n发送纯文本请求...")
             completion = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
-                max_tokens=max_tokens,
-                temperature=temperature
-                # 去除其他可能引起问题的参数
+                max_tokens=kwargs.get("max_tokens", self.config.get("max_tokens", 500)),
+                temperature=kwargs.get("temperature", self.config.get("temperature", 0.7))
             )
-            
-            # print("\n成功收到响应!")
             
             # 处理响应
             if hasattr(completion, "choices") and completion.choices and len(completion.choices) > 0:
                 content = completion.choices[0].message.content.strip()
-                # print(f"响应内容开头: {content[:50]}...")
                 return content
             else:
-                # print("警告: 收到意外的火山引擎响应格式。")
-                # print(f"响应内容: {completion}")
-                return "无法获取响应内容"
-                
-        except OpenAIError as e:
-            # 详细的错误信息
-            # print(f"\n--- 火山引擎API错误 ---")
-            # print(f"错误类型: {type(e).__name__}")
-            # print(f"错误信息: {str(e)}")
-            
-            # 尝试提取更多错误信息
-            if hasattr(e, 'response') and hasattr(e.response, 'text'):
-                try:
-                    import json
-                    error_detail = json.loads(e.response.text)
-                    # print(f"错误详情: {json.dumps(error_detail, indent=2, ensure_ascii=False)}")
-                except:
-                    # print(f"原始错误响应: {e.response.text}")
-                    pass
-            # 网络连接错误的特殊处理
-            if "Connection error" in str(e):
+                return "Error: 模型未返回有效内容"
+            if "Connection error" in str(error):
                 # print("\n可能的原因:")
                 # print("1. 网络连接问题 - 无法连接到火山引擎API服务器")
                 # print("2. API端点错误 - 配置中的endpoint可能有误")
@@ -247,14 +233,17 @@ class VolcEngineLLM(LLMInterfaceBase):
                 # print("4. API服务不可用 - 火山引擎服务可能暂时不可用")
                 pass
             
-            return f"Error: {str(e)}"
+            return f"Error: {str(error)}"
             
-        except Exception as e:
-            # print(f"\n--- 火山引擎调用过程中发生意外错误 ---")
-            # print(f"错误类型: {type(e).__name__}")
-            # print(f"错误信息: {str(e)}")
-            return f"Unexpected error: {str(e)}"
-
+        except (ValueError, TypeError, ConnectionError) as error:
+            # 处理可预期的错误类型
+            return f"Error: {str(error)}"
+        except Exception as error:
+            # 只在需要时输出特殊错误提示
+            if "certificate verify failed" in str(error).lower() or "ssl" in str(error).lower():
+                return "Error: SSL证书验证失败。请在配置文件中添加 'verify_ssl: false' 关闭证书验证（仅用于测试环境）。"
+            
+            return f"Error: {str(error)}"
 
 
 # 预留：Anthropic、其他 LLM 子类可类似扩展

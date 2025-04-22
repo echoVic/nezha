@@ -2,11 +2,24 @@
 工具注册与调用
 """
 
-from src.tools.file_io import FileRead, FileWrite, FileEdit
-from src.tools.navigation import Ls
-from src.tools.search import Glob, Grep
-from src.tools.shell import Bash
-from src.tools.git_tools import GitStatus, GitLog, GitDiff, GitBranch, GitPull, GitPush
+# 统一导入所有工具类，兼容包内与单文件调试
+try:
+    from .tools import (
+        FileRead, FileWrite, FileEdit,
+        Ls,
+        Glob, Grep,
+        Bash,
+        GitStatus, GitLog, GitDiff, GitBranch, GitPull, GitPush
+    )
+except ImportError:
+    # 兼容直接运行本文件的情况
+    from nezha_agent.tools import (
+        FileRead, FileWrite, FileEdit,
+        Ls,
+        Glob, Grep,
+        Bash,
+        GitStatus, GitLog, GitDiff, GitBranch, GitPull, GitPush
+    )
 
 class ToolRegistry:
     def __init__(self):

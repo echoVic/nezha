@@ -1,7 +1,7 @@
 """
 Agent工具调用与对话流闭环实现
 """
-from src.tool_registry import run_tool
+from nezha_agent.tool_registry import run_tool
 from typing import Any, Dict, Optional
 
 

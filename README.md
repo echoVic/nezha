@@ -19,7 +19,7 @@ pip install nezha-agent
 
 ### 源码安装
 ```bash
-git clone https://github.com/your-github-username-or-org/nezha.git
+git clone https://github.com/echovic/nezha.git
 cd nezha
 pip install .
 ```
