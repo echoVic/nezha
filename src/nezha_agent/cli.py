@@ -293,7 +293,7 @@ def main(
             console.print(Panel(f"[bold]执行出错:[/bold] {result['error']}", title="错误", border_style="red"))
         else:
             # 显示 AI 回复
-            console.print("\n[bold cyan]AI 回复:[/bold cyan]")
+            console.print("\n[bold cyan]nezha:[/bold cyan]")
             
             # 尝试解析 Markdown
             try:

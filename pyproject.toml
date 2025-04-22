@@ -25,6 +25,7 @@ dependencies = [
     "pyyaml",
     "platformdirs",
     "openai>=1.0.0",
+    "requests",
 ]
 
 [project.scripts]

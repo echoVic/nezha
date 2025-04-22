@@ -64,4 +64,4 @@ nezha plan "帮我写一个发送邮件的 Python 脚本"
 
 ## 联系方式
 - 邮箱：137844255@qq.com
-- Issues：https://github.com/your-github-username-or-org/nezha/issues
+- Issues：https://github.com/echovic/nezha/issues

@@ -5,6 +5,7 @@ llm:
   endpoint: https://ark.cn-beijing.volces.com/api/v3
   temperature: 0.2
   max_tokens: 2048
+  verify_ssl: false # 添加此行以禁用 SSL 验证 (仅用于测试)
 security:
   allow_bash: false
   allow_file_write: true

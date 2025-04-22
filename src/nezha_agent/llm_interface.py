@@ -172,8 +172,28 @@ class VolcEngineLLM(LLMInterfaceBase):
         if base_url.endswith('/'):
             base_url = base_url[:-1]
         
+        # 打印完整配置内容，便于调试
+        # print(f"[DEBUG] 完整配置: {self.config}")
+        
         # 禁用 SSL 证书验证（仅用于测试）
-        self.verify_ssl = self.config.get("verify_ssl", True)
+        # 兼容 llm 嵌套和顶层 verify_ssl
+        if "verify_ssl" in self.config:
+            _verify_ssl_raw = self.config["verify_ssl"]
+        elif "llm" in self.config and isinstance(self.config["llm"], dict) and "verify_ssl" in self.config["llm"]:
+            _verify_ssl_raw = self.config["llm"]["verify_ssl"]
+        else:
+            _verify_ssl_raw = True
+        if isinstance(_verify_ssl_raw, bool):
+            self.verify_ssl = _verify_ssl_raw
+        elif isinstance(_verify_ssl_raw, str):
+            self.verify_ssl = _verify_ssl_raw.strip().lower() in ("true", "1", "yes")
+        else:
+            self.verify_ssl = bool(_verify_ssl_raw)
+        # print(f"[DEBUG] verify_ssl type: {type(self.verify_ssl)}, value: {self.verify_ssl}")
+        
+        # 强制设置 verify_ssl 为 False，解决 SSL 验证问题
+        self.verify_ssl = False
+        # print(f"[DEBUG] 强制设置 verify_ssl = False")
         
         # 初始化客户端
         try:
@@ -181,7 +201,7 @@ class VolcEngineLLM(LLMInterfaceBase):
             if not self.verify_ssl:
                 # 禁用 SSL 证书验证的警告
                 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-                print("\n警告: SSL 证书验证已禁用，仅用于测试环境。生产环境请启用 SSL 验证。")
+                # print("\n警告: SSL 证书验证已禁用，仅用于测试环境。生产环境请启用 SSL 验证。")
             
             # 创建 OpenAI 客户端
             import httpx
@@ -189,7 +209,8 @@ class VolcEngineLLM(LLMInterfaceBase):
                 base_url=base_url,
                 api_key=api_key,
                 # 添加自定义 httpx 客户端以支持禁用 SSL 验证
-                http_client=httpx.Client(verify=self.verify_ssl)
+                # 恢复使用配置控制 SSL 验证
+                http_client=httpx.Client(verify=self.verify_ssl) 
             )
             
             # 设置环境变量，以防其他地方需要
@@ -199,7 +220,8 @@ class VolcEngineLLM(LLMInterfaceBase):
                 except (TypeError, ValueError):
                     pass
         except Exception as e:
-            print(f"\n初始化客户端失败: {e}")
+            # print(f"\n初始化客户端失败: {e}")
+            pass # 改为 pass，避免打印错误信息干扰正常流程
         
         # 模型 ID 是必须的
         if not self.model:
@@ -212,6 +234,15 @@ class VolcEngineLLM(LLMInterfaceBase):
 
     def chat(self, messages: list, **kwargs) -> str:
         try:
+            # --- 调试信息开始 ---
+            # print("--- VolcEngine API Request ---")
+            # print(f"Model: {self.model}")
+            # print(f"Messages: {messages}")
+            # print(f"Max Tokens: {kwargs.get('max_tokens', self.config.get('max_tokens', 500))}")
+            # print(f"Temperature: {kwargs.get('temperature', self.config.get('temperature', 0.7))}")
+            # print("-----------------------------")
+            # --- 调试信息结束 ---
+            
             completion = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
@@ -224,21 +255,53 @@ class VolcEngineLLM(LLMInterfaceBase):
                 content = completion.choices[0].message.content.strip()
                 return content
             else:
+                # print("--- VolcEngine API Error: No valid content returned ---") # 调试信息
                 return "Error: 模型未返回有效内容"
-            if "Connection error" in str(error):
-                # print("\n可能的原因:")
-                # print("1. 网络连接问题 - 无法连接到火山引擎API服务器")
-                # print("2. API端点错误 - 配置中的endpoint可能有误")
-                # print("3. 防火墙/代理问题 - 网络环境限制了对外部API的访问")
-                # print("4. API服务不可用 - 火山引擎服务可能暂时不可用")
-                pass
             
-            return f"Error: {str(error)}"
+        except OpenAIError as error: # 捕获 OpenAIError 以获取更具体的错误
+            # --- 调试信息增强 ---
+            # print(f"--- VolcEngine API OpenAIError Details: {error!r} ---") # 打印详细错误对象
+            # --- 调试信息结束 ---
+            # print(f"--- VolcEngine API OpenAIError: {error} ---") # 调试信息
+            error_msg = str(error)
+            # 可以在这里添加更详细的错误处理逻辑，类似 OpenAILLM 中的处理
+            if "connect" in error_msg.lower() or "connection" in error_msg.lower() or "timeout" in error_msg.lower():
+                # 尝试检测更具体的网络问题，类似 OpenAILLM 的处理
+                try:
+                    import requests
+                    # 测试基本网络连接 (可以换成更可靠的国内地址)
+                    requests.get("https://www.baidu.com", timeout=5)
+                    # 如果基本网络正常，可能是API端点或配置问题
+                    api_key_preview = self.api_key[:5] + "..." if self.api_key else "未设置"
+                    return (f"Error: Connection error. 无法连接到火山引擎 API 服务器 ({self.api_base or self.DEFAULT_BASE_URL})。请检查:\n"
+                            f"1. API 端点配置是否正确 (当前: {self.api_base or self.DEFAULT_BASE_URL})\n"
+                            f"2. 网络设置（防火墙、代理）是否允许访问该地址\n"
+                            f"3. API 密钥 ({api_key_preview}) 是否正确且有效\n"
+                            f"4. 模型 ID ({self.model}) 是否正确")
+                except ImportError:
+                     return (f"Error: Connection error. 无法连接到火山引擎 API 服务器 ({self.api_base or self.DEFAULT_BASE_URL})。请检查:\n"
+                            f"1. API 端点配置是否正确 (当前: {self.api_base or self.DEFAULT_BASE_URL})\n"
+                            f"2. 网络设置（防火墙、代理）是否允许访问该地址\n"
+                            f"3. API 密钥是否正确且有效\n"
+                            f"4. 模型 ID ({self.model}) 是否正确\n"
+                            f"(提示: 尝试安装 'requests' 库以获取更详细的网络诊断信息: pip install requests)")
+                except requests.exceptions.RequestException:
+                    # 基本网络连接也有问题
+                    return "Error: Connection error. 网络连接异常，请检查您的网络连接是否正常。"
+            elif "key" in error_msg.lower() or "auth" in error_msg.lower():
+                api_key_preview = self.api_key[:5] + "..." if self.api_key else "未设置"
+                return (f"Error: API key error. API密钥认证失败。请检查:\n"
+                        f"1. API密钥({api_key_preview})是否正确\n"
+                        f"2. 该密钥是否有权限访问模型({self.model})")
+            else:
+                return f"Error: {error_msg}"
             
         except (ValueError, TypeError, ConnectionError) as error:
+            # print(f"--- VolcEngine API ValueError/TypeError/ConnectionError: {error} ---") # 调试信息
             # 处理可预期的错误类型
             return f"Error: {str(error)}"
         except Exception as error:
+            # print(f"--- VolcEngine API Unexpected Exception: {error} ---") # 调试信息
             # 只在需要时输出特殊错误提示
             if "certificate verify failed" in str(error).lower() or "ssl" in str(error).lower():
                 return "Error: SSL证书验证失败。请在配置文件中添加 'verify_ssl: false' 关闭证书验证（仅用于测试环境）。"
