@@ -8,6 +8,7 @@ nezha 是一个命令行 AI 助手工具，支持模型选择、对话、计划�
 - 命令行交互式体验，支持对话 (`chat`)、计划 (`plan`) 等多种命令
 - 支持通过 `init` 命令初始化或重置配置
 - 配置灵活，支持用户自定义模型参数和安全设置
+- 内置安全层，提供不同级别的操作确认和路径限制
 - 适合二次开发和集成
 
 ## 安装方法
@@ -57,7 +58,7 @@ nezha plan "帮我写一个发送邮件的 Python 脚本"
 - 默认配置文件位于 `~/.config/nezha/config.yaml` (路径可能因操作系统而异，请参考 `platformdirs` 文档)
 - 可通过 `nezha init` 命令生成或重置配置文件
 - 支持自定义模型列表及参数
-- 安全相关配置位于 `security_config.yaml`
+- 安全相关配置位于 `config/security_config.yaml`，详情请参考 [安全层设计与使用指南](docs/security_layer.md)
 
 ## 贡献指南
 欢迎提交 issue 和 PR！如需贡献代码，请遵循本项目的代码规范。
