@@ -98,13 +98,52 @@ jobs:
           git push
       
       - name: 创建新 Tag
+        id: create_tag
         run: |
           NEW_VERSION=${{ steps.new_version.outputs.new_version }}
-          git tag -a "v$NEW_VERSION" -m "Release v$NEW_VERSION"
-          git push origin "v$NEW_VERSION"
+          
+          # 检查标签是否已存在
+          if git rev-parse "v$NEW_VERSION" >/dev/null 2>&1; then
+            echo "标签 v$NEW_VERSION 已存在，需要递增版本号"
+            
+            # 拆分版本号
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$NEW_VERSION"
+            
+            # 递增修订版本号
+            PATCH=$((PATCH + 1))
+            UPDATED_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+            
+            echo "递增后的版本号: $UPDATED_VERSION"
+            
+            # 更新 pyproject.toml 中的版本号
+            sed -i "s/version = \"$NEW_VERSION\"/version = \"$UPDATED_VERSION\"/" pyproject.toml
+            
+            # 提交更新的版本号
+            git add pyproject.toml
+            git commit -m "chore: 递增版本号到 $UPDATED_VERSION [标签冲突解决] [skip ci]"
+            git push
+            
+            # 创建新标签
+            git tag -a "v$UPDATED_VERSION" -m "Release v$UPDATED_VERSION"
+            git push origin "v$UPDATED_VERSION"
+            
+            # 设置输出变量
+            echo "version=$UPDATED_VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "创建新标签 v$NEW_VERSION"
+            git tag -a "v$NEW_VERSION" -m "Release v$NEW_VERSION"
+            git push origin "v$NEW_VERSION"
+            
+            # 设置输出变量
+            echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          fi
       
       - name: 构建包
-        run: python -m build
+        run: |
+          # 使用 create_tag 步骤输出的版本号
+          FINAL_VERSION=${{ steps.create_tag.outputs.version }}
+          echo "使用版本号 $FINAL_VERSION 构建包"
+          python -m build
       
       - name: 发布到 PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
