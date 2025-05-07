@@ -33,9 +33,10 @@ jobs:
         id: current_version
         run: |
           # 从 pyproject.toml 获取当前版本
-          CURRENT_VERSION=$(grep -oP 'version = "\K[^"]+' pyproject.toml)
-          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
-          echo "当前版本: $CURRENT_VERSION"
+          # 使用更可靠的方式提取版本号
+          CURRENT_VERSION=$(grep 'version' pyproject.toml | head -n 1 | cut -d '"' -f 2)
+          echo "current_version=${CURRENT_VERSION}" >> $GITHUB_OUTPUT
+          echo "当前版本: ${CURRENT_VERSION}"
       
       - name: 确定版本增量类型
         id: version_bump
