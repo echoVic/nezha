@@ -347,8 +347,16 @@ class AnthropicLLM(LLMInterfaceBase):
             
             # 处理响应
             return response.content[0].text
+        except ImportError as error:
+            return f"Error: Anthropic 库导入错误: {error}"
+        except ValueError as error:
+            return f"Error: 参数错误: {error}"
+        except ConnectionError as error:
+            return f"Error: 连接错误: {error}"
+        except AttributeError as error:
+            return f"Error: 属性错误: {error}"
         except Exception as error:
-            # 使用通用错误处理
+            # 使用通用错误处理，仅在其他异常都不匹配时使用
             return self._handle_api_error(error, "Anthropic")
 
 
@@ -367,7 +375,7 @@ class ChineseLLMBase(LLMInterfaceBase):
     
     def _init_client(self):
         """初始化客户端，子类应覆盖此方法"""
-        pass
+        # 这是一个抽象方法，由子类实现
     
     def generate(self, prompt: str, **kwargs) -> str:
         """使用聊天接口模拟 generate 功能"""
@@ -396,8 +404,16 @@ class WenxinLLM(ChineseLLMBase):
             
             # 处理响应
             return response.result
+        except ImportError as error:
+            return f"Error: 百度文心库导入错误: {error}"
+        except ValueError as error:
+            return f"Error: 参数错误: {error}"
+        except ConnectionError as error:
+            return f"Error: 连接错误: {error}"
+        except AttributeError as error:
+            return f"Error: 属性错误: {error}"
         except Exception as error:
-            # 使用通用错误处理
+            # 仅在其他异常都不匹配时使用通用错误处理
             return self._handle_api_error(error, "百度文心")
 
 
@@ -431,8 +447,16 @@ class TongyiLLM(ChineseLLMBase):
                 return response.output.choices[0].message.content
             else:
                 return f"Error: API 调用失败 (状态码: {response.status_code})"
+        except ImportError as error:
+            return f"Error: 阿里通义库导入错误: {error}"
+        except ValueError as error:
+            return f"Error: 参数错误: {error}"
+        except ConnectionError as error:
+            return f"Error: 连接错误: {error}"
+        except AttributeError as error:
+            return f"Error: 属性错误: {error}"
         except Exception as error:
-            # 使用通用错误处理
+            # 仅在其他异常都不匹配时使用通用错误处理
             return self._handle_api_error(error, "阿里通义")
 
 
@@ -462,8 +486,16 @@ class ZhipuAILLM(ChineseLLMBase):
             
             # 处理响应
             return response.choices[0].message.content
+        except ImportError as error:
+            return f"Error: 智谱AI库导入错误: {error}"
+        except ValueError as error:
+            return f"Error: 参数错误: {error}"
+        except ConnectionError as error:
+            return f"Error: 连接错误: {error}"
+        except AttributeError as error:
+            return f"Error: 属性错误: {error}"
         except Exception as error:
-            # 使用通用错误处理
+            # 仅在其他异常都不匹配时使用通用错误处理
             return self._handle_api_error(error, "智谱AI")
 
 
