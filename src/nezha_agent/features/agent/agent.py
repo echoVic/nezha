@@ -7,14 +7,14 @@ from typing import Any, Dict, Optional
 
 import yaml
 
-from nezha_agent.context_engine import \
+from ...core.context.context_engine import \
     ContextEngine  # Assuming ContextEngine provides context format
-from nezha_agent.llm_interface import LLMInterfaceBase, get_llm_interface
-from nezha_agent.security import SecurityManager
+from ...core.models.llm_interface import LLMInterfaceBase, get_llm_interface
+from ...core.security.security import SecurityManager
 
 # 导入获取当前模型的函数
 try:
-    from nezha_agent.cli import get_current_model
+    from ...ui.cli.cli import get_current_model
 except ImportError:
     # 如果无法导入，定义一个空函数
     def get_current_model():
@@ -49,7 +49,7 @@ class NezhaAgent:
             user_models = self.config.get("models", [])
             # 延迟导入 PREDEFINED_MODELS，避免循环引用
             try:
-                from nezha_agent.cli import PREDEFINED_MODELS
+                from ...ui.cli.cli import PREDEFINED_MODELS
             except ImportError:
                 PREDEFINED_MODELS = []
             all_models = PREDEFINED_MODELS + user_models
@@ -82,13 +82,18 @@ class NezhaAgent:
             for key in ["temperature", "max_tokens", "verify_ssl"]:
                 if key in llm_section:
                     llm_config[key] = llm_section[key]
-
+                    
+        # 确保 verify_ssl 选项存在，默认为 True
+        if "verify_ssl" not in llm_config:
+            llm_config["verify_ssl"] = True
+            
         # 初始化 LLM 接口
-        # 只保留必要的警告信息
-        if not llm_config.get("verify_ssl", True):
-            print("\n警告: SSL 证书验证已禁用，仅用于测试环境。生产环境请启用 SSL 验证。")
-        
-        self.llm_interface = get_llm_interface(llm_config)
+        try:
+            self.llm_interface = get_llm_interface(llm_config)
+            if not llm_config.get("verify_ssl", True):
+                print("\n警告: SSL 证书验证已禁用。这可能会导致安全风险。")
+        except Exception as e:
+            raise RuntimeError(f"初始化 LLM 接口失败: {e}")
 
         # TODO: Initialize other components like tool registry based on config
 
