@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="700" viewBox="0 0 900 700">
+  <!-- 手绘风格的背景 -->
+  <defs>
+    <filter id="roughPaper" x="0%" y="0%" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="5" result="noise" />
+      <feDiffuseLighting in="noise" lighting-color="#f8f8f8" surfaceScale="2" result="diffLight">
+        <feDistantLight azimuth="45" elevation="60" />
+      </feDiffuseLighting>
+    </filter>
+    <filter id="handDrawn">
+      <feTurbulence type="turbulence" baseFrequency="0.01" numOctaves="3" result="turbulence" />
+      <feDisplacementMap in="SourceGraphic" in2="turbulence" scale="2" />
+    </filter>
+    <!-- 手绘线条样式 -->
+    <style type="text/css">
+      .box {
+        fill: #ffffff;
+        stroke: #333333;
+        stroke-width: 2;
+        filter: url(#handDrawn);
+      }
+      .core {
+        fill: #ffecb3;
+      }
+      .features {
+        fill: #b3e5fc;
+      }
+      .integrations {
+        fill: #c8e6c9;
+      }
+      .plugins {
+        fill: #e1bee7;
+      }
+      .ui {
+        fill: #ffccbc;
+      }
+      .connector {
+        fill: none;
+        stroke: #999;
+        stroke-width: 1;
+        stroke-dasharray: 4 2;
+      }
+      .title {
+        font-family: 'Comic Sans MS', cursive, sans-serif;
+        font-size: 28px;
+        font-weight: bold;
+      }
+      .module-title {
+        font-family: 'Comic Sans MS', cursive, sans-serif;
+        font-size: 20px;
+        font-weight: bold;
+      }
+      .component {
+        font-family: 'Comic Sans MS', cursive, sans-serif;
+        font-size: 14px;
+      }
+      .arrow {
+        fill: none;
+        stroke: #999;
+        stroke-width: 1;
+        stroke-dasharray: 4 2;
+      }
+    </style>
+    <!-- 箭头标记 -->
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="7" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" />
+    </marker>
+  </defs>
+
+  <!-- 纸张纹理背景 -->
+  <rect width="100%" height="100%" fill="#ffffff" filter="url(#roughPaper)" />
+  
+  <!-- 手绘云朵代表 AI -->
+  <path d="M500 30 Q510 10 530 15 Q545 0 560 10 Q580 0 595 20 Q610 10 615 30 Q635 35 620 50 Q630 75 600 70 Q590 85 560 75 Q540 90 520 70 Q495 75 505 55 Q480 45 500 30" 
+        fill="#e3f2fd" stroke="#999" stroke-width="1" filter="url(#handDrawn)" />
+  <text x="550" y="45" text-anchor="middle" class="component">AI</text>
+  
+  <!-- 标题 -->
+  <text x="350" y="60" class="title" text-anchor="middle">Nezha 架构</text>
+
+  <!-- 核心模块: Core -->
+  <rect x="350" y="100" width="200" height="130" rx="10" ry="10" class="box core" />
+  <text x="450" y="130" class="module-title" text-anchor="middle">Core</text>
+  <text x="370" y="155" class="component">• 模型接口 (models)</text>
+  <text x="370" y="175" class="component">• 安全层 (security)</text>
+  <text x="370" y="195" class="component">• 上下文引擎 (context)</text>
+  <text x="370" y="215" class="component">• 工具平台 (tools)</text>
+
+  <!-- 左侧模块: Features -->
+  <rect x="100" y="280" width="200" height="150" rx="10" ry="10" class="box features" />
+  <text x="200" y="310" class="module-title" text-anchor="middle">Features</text>
+  <text x="120" y="335" class="component">• 代理 (agent)</text>
+  <text x="120" y="355" class="component">• 命令 (commands)</text>
+  <text x="120" y="375" class="component">• 工具 (tools)</text>
+  <text x="120" y="395" class="component">• 编辑/Git/Shell</text>
+  <text x="120" y="415" class="component">• 其他功能实现</text>
+
+  <!-- 右侧模块: Integrations -->
+  <rect x="600" y="280" width="200" height="150" rx="10" ry="10" class="box integrations" />
+  <text x="700" y="310" class="module-title" text-anchor="middle">Integrations</text>
+  <text x="620" y="335" class="component">• API集成</text>
+  <text x="620" y="355" class="component">• 编辑器集成</text>
+  <text x="620" y="375" class="component">• 外部工具集成</text>
+  <text x="620" y="395" class="component">• Shell集成</text>
+
+  <!-- 底部左侧: Plugins -->
+  <rect x="180" y="500" width="180" height="120" rx="10" ry="10" class="box plugins" />
+  <text x="270" y="530" class="module-title" text-anchor="middle">Plugins</text>
+  <text x="200" y="555" class="component">• 插件注册 (registry)</text>
+  <text x="200" y="575" class="component">• 插件SDK</text>
+  <text x="200" y="595" class="component">• 扩展功能</text>
+
+  <!-- 底部右侧: UI -->
+  <rect x="540" y="500" width="180" height="120" rx="10" ry="10" class="box ui" />
+  <text x="630" y="530" class="module-title" text-anchor="middle">UI</text>
+  <text x="560" y="555" class="component">• 命令行界面 (cli)</text>
+  <text x="560" y="575" class="component">• 显示功能 (display)</text>
+  <text x="560" y="595" class="component">• 终端功能 (terminal)</text>
+
+  <!-- 连接线 - 使用统一的浅色细线 -->
+  <!-- Core -> Features -->
+  <path d="M350 170 Q240 170 200 280" stroke="#999" stroke-width="1" stroke-dasharray="4,2" fill="none" />
+  <!-- Core -> Integrations -->
+  <path d="M550 170 Q660 170 700 280" stroke="#999" stroke-width="1" stroke-dasharray="4,2" fill="none" />
+  <!-- Features -> Plugins -->
+  <path d="M200 430 Q200 470 220 500" stroke="#999" stroke-width="1" stroke-dasharray="4,2" fill="none" />
+  <!-- Integrations -> Plugins -->
+  <path d="M650 430 Q460 480 360 520" stroke="#999" stroke-width="1" stroke-dasharray="4,2" fill="none" />
+  <!-- Features -> UI -->
+  <path d="M290 430 Q400 460 540 530" stroke="#999" stroke-width="1" stroke-dasharray="4,2" fill="none" />
+  <!-- Integrations -> UI -->
+  <path d="M610 430 Q610 460 620 500" stroke="#999" stroke-width="1" stroke-dasharray="4,2" fill="none" />
+
+
+  <!-- 模块间交互标签 -->
+  <rect x="310" y="340" width="280" height="30" rx="15" ry="15" fill="#f5f5f5" stroke="#999" stroke-width="1" opacity="0.8"/>
+  <text x="450" y="360" text-anchor="middle" class="component" style="font-weight: bold">功能与集成相互调用</text>
+  
+  <!-- 左右交互指示 -->
+  <path d="M320 340 L340 355 L320 370" stroke="#999" stroke-width="1" fill="none" />
+  <path d="M580 340 L560 355 L580 370" stroke="#999" stroke-width="1" fill="none" />
+
+  <!-- 注释: 已移动云朵到顶部 -->
+</svg>

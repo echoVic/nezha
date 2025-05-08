@@ -91,6 +91,52 @@ nezha plan "帮我写一个发送邮件的 Python 脚本"
 ## 贡献指南
 欢迎提交 issue 和 PR！如需贡献代码，请遵循本项目的代码规范。
 
+## 项目结构
+
+### 目录结构
+
+```
+src/nezha_agent/
+├── core/                 # 核心功能和基础组件
+│   ├── common/          # 通用工具和功能
+│   ├── context/         # 上下文引擎
+│   ├── models/          # 模型接口和实现
+│   ├── security/        # 安全相关功能
+│   └── tools/           # 核心工具接口
+├── features/            # 具体功能实现
+│   ├── agent/           # 代理相关功能
+│   ├── commands/        # 命令实现（chat、plan等）
+│   ├── editing/         # 文件编辑功能
+│   ├── git/             # Git相关功能
+│   ├── shell/           # Shell相关功能
+│   └── tools/           # 具体工具实现
+├── integrations/        # 与外部系统的集成
+│   ├── api/             # API集成
+│   ├── editors/         # 编辑器集成
+│   ├── external/        # 外部工具集成
+│   └── shells/          # Shell集成
+├── plugins/             # 插件系统
+│   ├── registry/        # 插件注册管理
+│   └── sdk/             # 插件开发工具包
+└── ui/                  # 用户界面
+    ├── cli/             # 命令行界面
+    ├── display/         # 显示相关功能
+    └── terminal/        # 终端相关功能
+```
+
+### 架构图
+
+<div align="center">
+  <img src="docs/nezha_architecture.svg" alt="Nezha 架构图" width="800" style="max-width: 800px;" />
+</div>
+
+架构说明：
+- **Core**：核心模块，包含模型接口、安全层、上下文引擎等基础组件
+- **Features**：实现具体功能，如代理、命令和各种工具
+- **Integrations**：负责与外部系统和工具的交互和集成
+- **Plugins**：提供插件系统，使得功能可扩展
+- **UI**：用户界面模块，主要包含命令行界面和显示功能
+
 ## 联系方式
 - 邮箱：137844255@qq.com
 - Issues：https://github.com/echovic/nezha/issues
