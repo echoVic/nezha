@@ -37,10 +37,10 @@ from rich.prompt import Prompt
 from rich.syntax import Syntax
 from rich.table import Table
 
-from .agent import NezhaAgent
-from .context_engine import ContextEngine
-from .plan_command import PlanCommand
-from .security import SecurityLevel, SecurityManager
+from ...features.agent.agent import NezhaAgent
+from ...core.context.context_engine import ContextEngine
+from ...features.commands.plan_command import PlanCommand
+from ...core.security.security import SecurityLevel, SecurityManager
 
 app = typer.Typer(
     help="nezha - AI 命令行代码助手\n\n模型管理相关命令：\n  nezha models              查看所有模型并切换当前模型\n  nezha models add          添加新模型到配置文件\n  nezha models list         仅列出所有模型（只读）\n\n其他命令请用 nezha --help 查看。",
@@ -673,7 +673,7 @@ def chat(
         agent = NezhaAgent(security_manager=security_manager, config_file=config_file, api_key=api_key)
         
         # 导入并运行 ChatCommand
-        from .chat_command import ChatCommand
+        from ...features.commands.chat_command import ChatCommand
         chat_cmd = ChatCommand(
             agent=agent,
             verbose=verbose

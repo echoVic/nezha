@@ -13,7 +13,7 @@ try:
     )
 except ImportError:
     # 兼容直接运行本文件的情况
-    from nezha_agent.tools import (
+    from ...features.tools import (
         FileRead, FileWrite, FileEdit,
         Ls,
         Glob, Grep,

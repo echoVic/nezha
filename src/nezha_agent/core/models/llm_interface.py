@@ -15,12 +15,12 @@ except ImportError:
     httpx = None # type: ignore
 
 # 工具描述自动注入
-from .tool_registry import ToolRegistry, run_tool
 
 def get_all_tool_descriptions() -> str:
     """
     自动收集所有注册工具的描述信息，拼接为 prompt 注入字符串。
     """
+    from ..tools.tool_registry import ToolRegistry
     registry = ToolRegistry()
     descs = []
     for tool in registry.tools.values():
@@ -37,6 +37,7 @@ def parse_llm_tool_call(llm_output: str):
         if "tool_call" in data:
             tool_name = data["tool_call"].get("tool_name")
             args = data["tool_call"].get("args", {})
+            from ..tools.tool_registry import run_tool
             result = run_tool(tool_name, args)
             return f"[工具 {tool_name} 调用结果]\n{result}"
     except (json.JSONDecodeError, KeyError, TypeError) as error:

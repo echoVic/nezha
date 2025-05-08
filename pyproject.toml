@@ -29,7 +29,7 @@ dependencies = [
 ]
 
 [project.scripts]
-nezha = "nezha_agent.cli:app"
+nezha = "nezha_agent.ui.cli.cli:app"
 
 [project.optional-dependencies]
 dev = [
