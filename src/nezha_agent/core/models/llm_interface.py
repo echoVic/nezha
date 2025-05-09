@@ -210,20 +210,23 @@ class OpenAIBasedLLM(LLMInterfaceBase):
     def _process_completion_response(self, completion, stream=False):
         """处理 API 返回的 completion 对象"""
         if stream:
-            # 处理流式响应
-            content = ""
-            for chunk in completion:
-                if chunk.choices and chunk.choices[0].delta.content:
-                    content += chunk.choices[0].delta.content
-            return content
+            # 处理流式响应，返回生成器
+            def response_generator():
+                for chunk in completion:
+                    if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
+                        yield chunk.choices[0].delta.content
+            return response_generator()
         else:
             # 处理普通响应
             if hasattr(completion, "choices") and completion.choices and len(completion.choices) > 0:
                 return completion.choices[0].message.content.strip()
             return "Error: 模型未返回有效内容"
     
-    def chat(self, messages: list, **kwargs) -> str:
-        """实现通用的 chat 接口"""
+    def chat(self, messages: list, **kwargs):
+        """实现通用的 chat 接口
+        
+        当 stream=True 时，返回生成器而不是字符串
+        """
         try:
             # 获取参数，优先使用传入的参数，其次使用配置中的参数，最后使用默认值
             max_tokens = kwargs.get("max_tokens", self.config.get("max_tokens", 2048))
@@ -251,10 +254,22 @@ class OpenAIBasedLLM(LLMInterfaceBase):
             
         except OpenAIError as error:
             # 使用通用错误处理
-            return self._handle_api_error(error, "OpenAI")
+            error_msg = self._handle_api_error(error, "OpenAI")
+            if stream:
+                # 对于流式输出，将错误消息包装成生成器返回
+                def error_generator():
+                    yield error_msg
+                return error_generator()
+            return error_msg
         except Exception as error:
             # 处理其他未预期的错误
-            return f"Error: Unexpected error: {str(error)}"
+            error_msg = f"Error: Unexpected error: {str(error)}"
+            if stream:
+                # 对于流式输出，将错误消息包装成生成器返回
+                def error_generator():
+                    yield error_msg
+                return error_generator()
+            return error_msg
 
 # OpenAI 子类
 class OpenAILLM(OpenAIBasedLLM):

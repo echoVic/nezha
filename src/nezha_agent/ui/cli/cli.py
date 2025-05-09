@@ -228,6 +228,7 @@ def models_add():
 def main(
     prompt: str = typer.Argument(..., help="输入你的自然语言指令"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="显示详细执行信息"),
+    stream: bool = typer.Option(True, "--stream", help="启用流式输出（默认开启）"),
     security_level: str = typer.Option(
         "normal", "--security", "-s",
         help="安全级别: strict(严格), normal(普通), relaxed(宽松), bypass(绕过)"
@@ -274,19 +275,37 @@ def main(
         # 设置上下文引擎
         agent.context_engine = context_engine
         
-        # 显示加载进度
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[bold blue]{task.description}"),
-            console=console,
-            transient=True,
-        ) as progress:
-            progress.add_task("正在加载模型...", total=None)
-            # 执行任务
-            result = agent.run(prompt)
-            # 兼容 agent.run 返回字符串，包装成 dict
-            if not isinstance(result, dict):
-                result = {"response": result, "error": None, "tool_calls": []}
+        if not stream:
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[bold blue]{task.description}"),
+                console=console,
+                transient=True,
+            ) as progress:
+                progress.add_task("正在加载模型...", total=None)
+                # 执行任务
+                result = agent.run(prompt)
+                # 兼容 agent.run 返回字符串，包装成 dict
+                if not isinstance(result, dict):
+                    result = {"response": result, "error": None, "tool_calls": []}
+        else:
+            # 流式输出模式
+            console.print("\n[bold cyan]nezha:[/bold cyan]")
+            console.print("[dim](按Ctrl+C可中断生成)[/dim]")
+            # 执行任务并获取生成器
+            response_generator = agent.run(prompt, verbose=verbose, stream=True)
+            # 逐个输出响应片段
+            response_text = ""
+            try:
+                for chunk in response_generator:
+                    console.print(chunk, end="")
+                    response_text += chunk
+            except KeyboardInterrupt:
+                console.print("\n\n[bold red][生成已被用户中断][/bold red]")
+            finally:
+                console.print()  # 换行
+                # 包装结果
+                result = {"response": response_text, "error": None, "tool_calls": []}
         
         # 显示结果
         if result.get("error"):
@@ -349,9 +368,10 @@ def main(
 def plan(
     initial_requirement: str = typer.Argument(..., help="初始需求描述"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="显示详细执行信息"),
-    security_level: SecurityLevel = typer.Option(
-        SecurityLevel.NORMAL, "--security", "-s",
-        help="安全级别: strict(严格), normal(普通), relaxed(宽松), bypass(绕过)"
+    stream: bool = typer.Option(True, "--stream", help="启用流式输出（默认开启）"),
+    security_level: str = typer.Option(
+        "normal", "--security", "-s",
+        help="安全级别: strict(严格), normal(标准), relaxed(宽松), bypass(绕过)"
     ),
     config_file: Optional[Path] = typer.Option(None, "--config", help="配置文件路径"),
     api_key: Optional[str] = typer.Option(None, "--api-key", help="通过命令行注入大模型 API Key，优先级高于配置文件和环境变量")
@@ -365,8 +385,19 @@ def plan(
     console.print(Panel(f"[bold]需求描述:[/bold] {initial_requirement}", title="nezha plan", border_style="blue"))
     
     try:
+        # 将字符串安全级别转换为枚举类型
+        security_level_map = {
+            "strict": SecurityLevel.STRICT,
+            "normal": SecurityLevel.NORMAL,
+            "relaxed": SecurityLevel.RELAXED,
+            "bypass": SecurityLevel.BYPASS
+        }
+        if security_level.lower() not in security_level_map:
+            raise typer.BadParameter(f"不支持的安全级别: {security_level}，可选值: strict, normal, relaxed, bypass")
+        security_enum = security_level_map[security_level.lower()]
+        
         # 初始化安全管理器
-        security_manager = SecurityManager(security_level)
+        security_manager = SecurityManager(security_enum)
         
         # 初始化上下文引擎
         context_engine = ContextEngine(working_dir=os.getcwd())
@@ -384,23 +415,27 @@ def plan(
         # 设置上下文引擎
         agent.context_engine = context_engine
         
-        # 显示加载进度
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[bold blue]{task.description}"),
-            console=console,
-            transient=True,
-        ) as progress:
-            progress.add_task("正在加载模型...", total=None)
-            
-            # 初始化 PlanCommand
-            plan_command = PlanCommand(
-                agent=agent,
-                context_engine=context_engine,
-                verbose=verbose
-            )
-            
-            # 执行规划
+        # 初始化 PlanCommand
+        plan_command = PlanCommand(
+            agent=agent,
+            context_engine=context_engine,
+            verbose=verbose,
+            stream=stream
+        )
+        
+        # 在非流式输出模式下显示加载进度
+        if not stream:
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[bold blue]{task.description}"),
+                console=console,
+                transient=True,
+            ) as progress:
+                progress.add_task("正在加载模型...", total=None)
+                # 执行规划
+                plan_command.run(initial_requirement)
+        else:
+            # 流式输出模式下直接执行规划
             plan_command.run(initial_requirement)
     
     except (ValueError, TypeError) as error:
@@ -648,6 +683,7 @@ def init(
 def chat(
     initial_message: Optional[str] = typer.Argument(None, help="初始对话消息"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="显示详细执行信息"),
+    stream: bool = typer.Option(True, "--stream", help="启用流式输出（默认开启）"),
     config_file: Optional[Path] = typer.Option(None, "--config", help="配置文件路径"),
     api_key: Optional[str] = typer.Option(None, "--api-key", help="通过命令行注入大模型 API Key，优先级高于配置文件和环境变量")
 ):
@@ -676,7 +712,8 @@ def chat(
         from ...features.commands.chat_command import ChatCommand
         chat_cmd = ChatCommand(
             agent=agent,
-            verbose=verbose
+            verbose=verbose,
+            stream=stream
         )
         chat_cmd.run(initial_message)
         
