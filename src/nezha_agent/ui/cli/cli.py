@@ -152,7 +152,16 @@ def models(
             if not config.get("llm"):
                 config["llm"] = {}
             
-            config["llm"]["model"] = selected_model["id"]
+            # 完全更新llm部分的配置
+            config["llm"] = {
+                "model": selected_model["id"],
+                "provider": selected_model.get("provider"),
+                "api_key": selected_model.get("api_key"),
+            }
+            
+            # 如果有endpoint，也添加到配置中
+            if "endpoint" in selected_model:
+                config["llm"]["endpoint"] = selected_model["endpoint"]
             
             # 确保 models 列表中包含选中的模型
             if selected_index < len(PREDEFINED_MODELS):
@@ -197,13 +206,14 @@ def models_add():
     if provider == "other":
         provider = Prompt.ask("请输入提供商名称")
     
-    model_id = Prompt.ask("模型 ID")
+    model = Prompt.ask("模型名称/ID")
     api_key = Prompt.ask("API Key")
     endpoint = Prompt.ask("API 端点", default="")
     
     # 创建模型配置
     new_model = {
-        "id": model_id,
+        "id": model,  # 使用模型名称作为内部ID
+        "model": model,  # 同时设置 model 字段
         "name": name,
         "provider": provider,
         "api_key": api_key
@@ -310,7 +320,7 @@ def main(
         # 显示结果
         if result.get("error"):
             console.print(Panel(f"[bold]执行出错:[/bold] {result['error']}", title="错误", border_style="red"))
-        else:
+        elif not stream:  # 只在非流式输出模式下显示完整响应
             # 显示 AI 回复
             console.print("\n[bold cyan]nezha:[/bold cyan]")
             
