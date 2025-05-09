@@ -64,6 +64,22 @@ PREDEFINED_MODELS = [
         "provider": "volcengine",
         "api_key": "****",
         "endpoint": "https://ark.cn-beijing.volces.com/api/v3",
+    },
+    {
+        "id": "qwen3-235b-a22b",
+        "model": "qwen3-235b-a22b",
+        "name": "阿里千问 - Qwen3-235B",
+        "provider": "qwen",
+        "api_key": "****",
+        "endpoint": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    },
+    {
+        "id": "qwen-plus",
+        "model": "qwen-plus-2025-04-28",
+        "name": "阿里千问 - Qwen-Plus",
+        "provider": "qwen",
+        "api_key": "****",
+        "endpoint": "https://dashscope.aliyuncs.com/compatible-mode/v1",
     }
 ]
 
