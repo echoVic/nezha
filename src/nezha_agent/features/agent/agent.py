@@ -129,9 +129,18 @@ class NezhaAgent:
             f"请先运行 'nezha init' 进行初始化！"
         )
 
-    def plan_chat(self, history: list, verbose: bool = False):
-        """Handles the interactive planning chat loop."""
-        if verbose:
+    def plan_chat(self, history: list, verbose: bool = False, stream: bool = False):
+        """Handles the interactive planning chat loop.
+        
+        Args:
+            history: 对话历史记录
+            verbose: 是否显示详细日志
+            stream: 是否使用流式输出
+            
+        Returns:
+            如果stream=True，返回生成器；否则返回字符串
+        """
+        if verbose and not stream:
             print(f"\n--- Sending History to LLM ({self.config.get('llm', {}).get('provider')}) ---")
             for msg in history:
                 print(f"[{msg['role']}]: {msg['content']}")
@@ -139,18 +148,34 @@ class NezhaAgent:
 
         try:
             # Directly use the history provided by PlanCommand
-            response = self.llm_interface.chat(history)
+            response = self.llm_interface.chat(history, stream=stream)
             # if verbose:
             #     print("\n--- LLM Response ---")
             #     print(response)
             #     print("--------------------")
             return response
         except Exception as e:
+            error_msg = f"Error during planning chat: {e}"
             print(f"Error during LLM call in plan_chat: {e}")
-            return f"Error during planning chat: {e}"
+            if stream:
+                # 流式输出模式下，将错误消息包装为生成器返回
+                def error_generator():
+                    yield error_msg
+                return error_generator()
+            return error_msg
 
-    def run(self, prompt: str, context: Optional[Dict[str, Any]] = None, verbose: bool = False):
-        """执行用户指令"""
+    def run(self, prompt: str, context: Optional[Dict[str, Any]] = None, verbose: bool = False, stream: bool = False):
+        """执行用户指令
+        
+        Args:
+            prompt: 用户输入的指令
+            context: 上下文信息
+            verbose: 是否显示详细日志
+            stream: 是否使用流式输出
+            
+        Returns:
+            如果stream=True，返回生成器；否则返回字符串
+        """
         # TODO: Implement the core agent loop:
         # 1. Construct the full prompt including context, system prompt, etc.
         # 2. Call the LLM using self.llm_interface.chat() or generate()
@@ -160,7 +185,7 @@ class NezhaAgent:
 
         # Placeholder implementation:
         full_prompt = f"Context:\n{context}\n\nUser Prompt: {prompt}"
-        if verbose:
+        if verbose and not stream:
             print(f"\n--- Sending to LLM ({self.config.get('llm', {}).get('provider')}) ---")
             print(full_prompt)
             print("---------------------------------------")
@@ -172,7 +197,7 @@ class NezhaAgent:
                 {"role": "system", "content": "You are a helpful AI assistant." }, # TODO: Load system prompt from config/prompts
                 {"role": "user", "content": full_prompt}
             ]
-            response = self.llm_interface.chat(messages)
+            response = self.llm_interface.chat(messages, stream=stream)
             # if verbose:
             #     print("\n--- LLM Response ---")
             #     print(response)
@@ -181,4 +206,10 @@ class NezhaAgent:
         except Exception as e:
             # TODO: More specific error handling
             # print(f"Error during LLM call: {e}")
-            return f"Error executing prompt: {e}"
+            error_msg = f"Error executing prompt: {e}"
+            if stream:
+                # 流式输出模式下，将错误消息包装为生成器返回
+                def error_generator():
+                    yield error_msg
+                return error_generator()
+            return error_msg

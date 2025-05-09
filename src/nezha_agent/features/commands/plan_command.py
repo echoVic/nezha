@@ -4,10 +4,11 @@ from typing import Any, Dict, List, Optional
 
 
 class PlanCommand:
-    def __init__(self, agent, context_engine, verbose: bool = False, output_file: Optional[Path] = None):
+    def __init__(self, agent, context_engine, verbose: bool = False, stream: bool = False, output_file: Optional[Path] = None):
         self.agent = agent
         self.context_engine = context_engine
         self.verbose = verbose
+        self.stream = stream
         self.output_file = output_file or Path("plan_output.md")
         self.history: List[Dict[str, str]] = []  # [{role: "user"/"assistant", content: str}]
 
@@ -21,9 +22,28 @@ class PlanCommand:
         self.add_message("user", initial_requirement)
         while True:
             # 与agent多轮对话
-            response = self.agent.plan_chat(self.history)
-            self.add_message("assistant", response)
-            print("\nAI建议:\n", response)
+            if not self.stream:
+                # 非流式输出模式
+                response = self.agent.plan_chat(self.history, verbose=self.verbose)
+                self.add_message("assistant", response)
+                print("\nnezha建议:\n", response)
+            else:
+                # 流式输出模式
+                print("\nnezha建议:")
+                print("(按Ctrl+C可中断生成)")
+                response_generator = self.agent.plan_chat(self.history, verbose=self.verbose, stream=True)
+                response_text = ""
+                try:
+                    for chunk in response_generator:
+                        print(chunk, end="", flush=True)
+                        response_text += chunk
+                except KeyboardInterrupt:
+                    print("\n\n[生成已被用户中断]")
+                finally:
+                    print()  # 换行
+                    # 即使被中断，也将已生成的内容添加到历史记录中
+                    self.add_message("assistant", response_text)
+                
             user_input = input("请输入补充/修改需求，或直接回车结束: ").strip()
             if not user_input:
                 break

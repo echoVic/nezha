@@ -8,9 +8,10 @@ console = Console()
 
 
 class ChatCommand:
-    def __init__(self, agent, verbose: bool = False):
+    def __init__(self, agent, verbose: bool = False, stream: bool = False):
         self.agent = agent
         self.verbose = verbose
+        self.stream = stream
         self.history = []  # [{role: "user"/"assistant", content: str}]
 
     def add_message(self, role: str, content: str):
@@ -35,18 +36,38 @@ class ChatCommand:
             
             # 调用agent处理对话
             try:
-                # 添加加载指示器
-                with Progress(
-                    SpinnerColumn(),
-                    TextColumn("[progress.description]{task.description}"),
-                    transient=True,  # 完成时移除进度显示
-                    console=console   # 使用相同的控制台
-                ) as progress:
-                    progress.add_task(description="思考中...", total=None)  # 不确定的任务
-                    response = self.agent.plan_chat(self.history, self.verbose)
-                
-                self.add_message("assistant", response)
-                console.print(Panel(Markdown(response), title="nezha", border_style="cyan"))
+                if not self.stream:
+                    # 非流式模式
+                    # 添加加载指示器
+                    with Progress(
+                        SpinnerColumn(),
+                        TextColumn("[progress.description]{task.description}"),
+                        transient=True,  # 完成时移除进度显示
+                        console=console   # 使用相同的控制台
+                    ) as progress:
+                        progress.add_task(description="思考中...", total=None)  # 不确定的任务
+                        response = self.agent.plan_chat(self.history, self.verbose)
+                    
+                    self.add_message("assistant", response)
+                    console.print(Panel(Markdown(response), title="nezha", border_style="cyan"))
+                else:
+                    # 流式输出模式
+                    console.print("\n[bold cyan]nezha:[/bold cyan]")
+                    console.print("[dim](按Ctrl+C可中断生成)[/dim]")
+                    response_generator = self.agent.plan_chat(self.history, verbose=self.verbose, stream=True)
+                    response_text = ""
+                    try:
+                        for chunk in response_generator:
+                            console.print(chunk, end="")
+                            response_text += chunk
+                    except KeyboardInterrupt:
+                        console.print("\n\n[bold red][生成已被用户中断][/bold red]")
+                    finally:
+                        console.print()  # 换行
+                        # 即使被中断，也将已生成的内容添加到历史记录中
+                        self.add_message("assistant", response_text)
+                        # 在流式输出后显示分隔线
+                        console.print("\n" + "-"*50)
             except (ValueError, TypeError) as error:
                 # 处理可预期的错误类型
                 console.print(Panel(f"[bold]对话处理出错:[/bold] {error}", title="错误", border_style="red"))

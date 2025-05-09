@@ -210,20 +210,23 @@ class OpenAIBasedLLM(LLMInterfaceBase):
     def _process_completion_response(self, completion, stream=False):
         """处理 API 返回的 completion 对象"""
         if stream:
-            # 处理流式响应
-            content = ""
-            for chunk in completion:
-                if chunk.choices and chunk.choices[0].delta.content:
-                    content += chunk.choices[0].delta.content
-            return content
+            # 处理流式响应，返回生成器
+            def response_generator():
+                for chunk in completion:
+                    if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
+                        yield chunk.choices[0].delta.content
+            return response_generator()
         else:
             # 处理普通响应
             if hasattr(completion, "choices") and completion.choices and len(completion.choices) > 0:
                 return completion.choices[0].message.content.strip()
             return "Error: 模型未返回有效内容"
     
-    def chat(self, messages: list, **kwargs) -> str:
-        """实现通用的 chat 接口"""
+    def chat(self, messages: list, **kwargs):
+        """实现通用的 chat 接口
+        
+        当 stream=True 时，返回生成器而不是字符串
+        """
         try:
             # 获取参数，优先使用传入的参数，其次使用配置中的参数，最后使用默认值
             max_tokens = kwargs.get("max_tokens", self.config.get("max_tokens", 2048))
@@ -251,10 +254,22 @@ class OpenAIBasedLLM(LLMInterfaceBase):
             
         except OpenAIError as error:
             # 使用通用错误处理
-            return self._handle_api_error(error, "OpenAI")
+            error_msg = self._handle_api_error(error, "OpenAI")
+            if stream:
+                # 对于流式输出，将错误消息包装成生成器返回
+                def error_generator():
+                    yield error_msg
+                return error_generator()
+            return error_msg
         except Exception as error:
             # 处理其他未预期的错误
-            return f"Error: Unexpected error: {str(error)}"
+            error_msg = f"Error: Unexpected error: {str(error)}"
+            if stream:
+                # 对于流式输出，将错误消息包装成生成器返回
+                def error_generator():
+                    yield error_msg
+                return error_generator()
+            return error_msg
 
 # OpenAI 子类
 class OpenAILLM(OpenAIBasedLLM):
@@ -461,6 +476,91 @@ class TongyiLLM(ChineseLLMBase):
             return self._handle_api_error(error, "阿里通义")
 
 
+class QwenLLM(OpenAIBasedLLM):
+    """阿里千问 LLM 接口 (使用 OpenAI 兼容 API)"""
+    
+    DEFAULT_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    
+    def __init__(self, config: Optional[Dict[str, Any]] = None):
+        super().__init__(config)
+        
+        # 确保必要的配置存在
+        if not self.api_key:
+            raise ValueError("未在配置中指定千问 API Key (api_key)。")
+        
+        # 默认模型
+        if not self.model:
+            self.model = "qwen-plus"
+    
+    def _init_client(self):
+        """初始化 OpenAI 客户端"""
+        if not OpenAI:
+            raise ImportError("未安装 OpenAI 库，请运行 'pip install openai'。")
+        
+        # 使用用户提供的 API 基础地址或默认值
+        base_url = self.api_base or self.DEFAULT_BASE_URL
+        
+        # 创建 OpenAI 客户端
+        try:
+            self.client = OpenAI(
+                api_key=self.api_key,
+                base_url=base_url,
+            )
+        except Exception as e:
+            raise RuntimeError(f"初始化千问 API 客户端失败: {e}")
+    
+    def chat(self, messages: list, **kwargs):
+        stream = kwargs.get("stream", False)
+        
+        try:
+            # 初始化客户端（如果还没有初始化）
+            if not self.client:
+                self._init_client()
+            
+            # 准备调用参数
+            call_kwargs = {
+                "model": self.model,
+                "messages": messages,
+                "stream": stream,
+            }
+            
+            # 对于 Qwen3 模型，添加 enable_thinking 参数
+            if "qwen3" in self.model.lower() and not stream:
+                call_kwargs["extra_body"] = {"enable_thinking": False}
+            
+            # 添加其他用户参数
+            for key, value in kwargs.items():
+                if key not in ["stream"]:
+                    call_kwargs[key] = value
+            
+            # 调用 API
+            response = self.client.chat.completions.create(**call_kwargs)
+            
+            # 处理响应
+            if stream:
+                # 流式输出模式
+                def response_generator():
+                    for chunk in response:
+                        if hasattr(chunk, "choices") and chunk.choices and hasattr(chunk.choices[0], "delta"):
+                            content = chunk.choices[0].delta.content
+                            if content:
+                                yield content
+                return response_generator()
+            else:
+                # 非流式输出模式
+                return response.choices[0].message.content
+        except Exception as e:
+            # 处理错误
+            error_msg = self._handle_api_error(e, "阿里千问")
+            if stream:
+                # 流式输出模式下，将错误消息包装为生成器返回
+                def error_generator():
+                    yield error_msg
+                return error_generator()
+            else:
+                return error_msg
+
+
 class ZhipuAILLM(ChineseLLMBase):
     """智谱AI LLM 接口"""
     
@@ -517,5 +617,7 @@ def get_llm_interface(config: Dict[str, Any]) -> LLMInterfaceBase:
         return TongyiLLM(config)
     elif provider == "zhipuai":
         return ZhipuAILLM(config)
+    elif provider == "qwen":
+        return QwenLLM(config)
     else:
         raise ValueError(f"Unsupported LLM provider: {provider}")
