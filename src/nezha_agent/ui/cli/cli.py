@@ -46,6 +46,7 @@ app = typer.Typer(
     help="nezha - AI 命令行代码助手\n\n模型管理相关命令：\n  nezha models              查看所有模型并切换当前模型\n  nezha models add          添加新模型到配置文件\n  nezha models list         仅列出所有模型（只读）\n\n其他命令请用 nezha --help 查看。",
     no_args_is_help=True,
     add_completion=True,
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True}
 )
 
 console = Console()
@@ -110,11 +111,6 @@ def select_model():
     # 复用 models 逻辑，进入交互选择模式
     models(set_model=True)
 
-
-@models_app.command("add")
-def add_model():
-    """添加新模型到 config.yaml 的 models 列表"""
-    models_add()
 
 @models_app.command("__default__")
 def models(
@@ -507,263 +503,55 @@ def get_user_security_config_path():
     config_dir.mkdir(parents=True, exist_ok=True)
     return config_dir / "security_config.yaml"
 
-@app.command()
-def init(
-    config_file: Optional[Path] = typer.Option(
-        None, "--config", "-c", help="配置文件路径，默认写入用户目录 ~/.config/nezha/config.yaml"
-    ),
-    security_config: Optional[Path] = typer.Option(
-        None, "--security-config", "-s", help="安全配置文件路径，默认写入用户目录 ~/.config/nezha/security_config.yaml"
-    ),
-    api_key: Optional[str] = typer.Option(
-        None, "--api-key", help="通过命令行注入大模型 API Key，优先级高于配置文件和环境变量"
-    ),
-):
-    """nezha 初始化命令 - 配置大模型接口、token和规则集"""
-    # 默认读取用户级别配置
-    if config_file is None:
-        config_file = get_user_config_path()
-    
-    if security_config is None:
-        security_config = get_user_security_config_path()
-    
-    # 确保目录存在
-    config_file.parent.mkdir(parents=True, exist_ok=True)
-    security_config.parent.mkdir(parents=True, exist_ok=True)
-    
-    console.print(Panel("[bold]欢迎使用 nezha 初始化向导[/bold]", title="nezha init", border_style="blue"))
-    console.print("这将帮助你配置 nezha 的基本设置，包括大模型接口和安全级别。")
-    
-    # 读取已有配置（如果存在）
-    existing_config = {}
-    if config_file.exists():
-        try:
-            with open(config_file, "r", encoding="utf-8") as f:
-                existing_config = yaml.safe_load(f) or {}
-            console.print(f"[bold yellow]注意:[/bold yellow] 检测到已有配置文件 {config_file}，将在其基础上更新。")
-        except (IOError, yaml.YAMLError) as error:
-            console.print(f"[bold red]✗[/bold red] 读取现有配置文件失败: {error}")
-    
-    # 选择模型提供商
-    providers = ["openai", "volcengine", "other"]
-    provider_names = {
-        "openai": "OpenAI API",
-        "volcengine": "火山引擎",
-        "other": "其他提供商"
-    }
-    
-    console.print("\n[bold]第一步: 选择大模型提供商[/bold]")
-    for i, p in enumerate(providers):
-        console.print(f"  {i+1}. {provider_names[p]}")
-    
-    provider_idx = Prompt.ask(
-        "请选择提供商 [序号]",
-        choices=[str(i+1) for i in range(len(providers))],
-        default="1"
-    )
-    provider = providers[int(provider_idx) - 1]
-    
-    if provider == "other":
-        provider = Prompt.ask("请输入提供商名称")
-    
-    # 配置 API Key
-    console.print(f"\n[bold]第二步: 配置 {provider_names.get(provider, provider)} API Key[/bold]")
-    
-    # 如果命令行提供了 API Key，优先使用
-    if api_key:
-        console.print(f"[bold green]✓[/bold green] 已通过命令行参数提供 API Key")
-    else:
-        # 尝试从环境变量获取
-        env_var_name = f"{provider.upper()}_API_KEY"
-        env_api_key = os.environ.get(env_var_name)
-        
-        if env_api_key:
-            use_env = Prompt.ask(
-                f"检测到环境变量 {env_var_name}，是否使用该值?",
-                choices=["y", "n"],
-                default="y"
-            )
-            
-            if use_env.lower() == "y":
-                api_key = env_api_key
-                console.print(f"[bold green]✓[/bold green] 已使用环境变量中的 API Key")
-            else:
-                api_key = Prompt.ask("请输入 API Key", password=True)
-        else:
-            api_key = Prompt.ask("请输入 API Key", password=True)
-    
-    # 配置 API 端点
-    endpoint = None
-    if provider != "openai":
-        console.print(f"\n[bold]第三步: 配置 {provider_names.get(provider, provider)} API 端点[/bold]")
-        default_endpoints = {
-            "volcengine": "https://ark.cn-beijing.volces.com/api/v3",
-        }
-        default_endpoint = default_endpoints.get(provider, "")
-        endpoint = Prompt.ask("请输入 API 端点", default=default_endpoint)
-    
-    # 选择默认模型
-    console.print("\n[bold]第四步: 选择默认模型[/bold]")
-    default_models = {
-        "openai": [
-            {"id": "gpt-4", "name": "GPT-4"},
-            {"id": "gpt-4-turbo", "name": "GPT-4 Turbo"},
-            {"id": "gpt-3.5-turbo", "name": "GPT-3.5 Turbo"},
-        ],
-        "volcengine": [
-            {"id": "ep-20250417174840-6c94l", "name": "Doubao-1.5-pro-32k"},
-        ]
-    }
-    
-    models = default_models.get(provider, [])
-    if models:
-        for i, m in enumerate(models):
-            console.print(f"  {i+1}. {m['name']} ({m['id']})")
-        
-        model_idx = Prompt.ask(
-            "请选择默认模型 [序号]",
-            choices=[str(i+1) for i in range(len(models))],
-            default="1"
-        )
-        model = models[int(model_idx) - 1]["id"]
-    else:
-        model = Prompt.ask("请输入模型 ID")
-    
-    # 选择安全级别
-    console.print("\n[bold]第五步: 选择安全级别[/bold]")
-    security_levels = [
-        {"id": "strict", "name": "严格 (只允许读取文件)"},
-        {"id": "normal", "name": "普通 (允许读写文件，需确认高风险操作)"},
-        {"id": "relaxed", "name": "宽松 (允许执行 shell 命令，需确认高风险操作)"},
-        {"id": "bypass", "name": "绕过 (允许所有操作，不需确认)"}
-    ]
-    
-    for i, level in enumerate(security_levels):
-        console.print(f"  {i+1}. {level['name']}")
-    
-    level_idx = Prompt.ask(
-        "请选择安全级别 [序号]",
-        choices=[str(i+1) for i in range(len(security_levels))],
-        default="2"
-    )
-    security_level = security_levels[int(level_idx) - 1]["id"]
-    
-    # 构建 LLM 配置
-    llm_config = {
-        "provider": provider,
-        "api_key": api_key,
-        "model": model
-    }
-    
-    if endpoint:
-        llm_config["endpoint"] = endpoint
-    
-    # 生成主配置文件
-    full_config = {
-        "llm": llm_config,
-        "security": {
-            "allow_bash": security_level in ["relaxed", "bypass"],
-            "allow_file_write": security_level != "strict",
-            "allow_file_edit": security_level != "strict",
-            "confirm_high_risk": security_level != "bypass"
-        },
-        "tools": {
-            "enabled": [
-                "FileRead", 
-                "FileWrite", 
-                "FileEdit", 
-                "Glob", 
-                "Grep", 
-                "Ls"
-            ]
-        }
-    }
-    # 暂时注释掉 rules 配置相关代码，避免 use_rules 未定义错误
-    # if use_rules:
-    #     full_config["rules"] = rules_config
-
-    # 生成安全配置文件
-    security_config_data = {
-        "security_level": security_level,
-        "yes_to_all": False,
-        "allowed_paths": [],
-        "disabled_tools": []
-    }
-    # 写入配置文件
-    try:
-        with open(config_file, "w", encoding="utf-8") as f:
-            yaml.dump(full_config, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
-        with open(security_config, "w", encoding="utf-8") as f:
-            yaml.dump(security_config_data, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
-        console.print(f"\n[bold green]✓[/bold green] 配置已保存至: [bold]{config_file}[/bold] 和 [bold]{security_config}[/bold]")
-        console.print("\n现在你可以使用 [bold]nezha <指令>[/bold] 来执行任务了!")
-    except (IOError, yaml.YAMLError) as error:
-        console.print(Panel(f"[bold]保存配置时出错:[/bold] {error}", title="错误", border_style="red"))
-        raise typer.Exit(code=1)
-    except Exception as error:
-        console.print(Panel(f"[bold]未预期的错误:[/bold] {error}", title="错误", border_style="red"))
-        raise typer.Exit(code=1)
-
-
-@app.command()
-def chat(
-    initial_message: Optional[str] = typer.Argument(None, help="初始对话消息"),
-    verbose: bool = typer.Option(False, "--verbose", "-v", help="显示详细执行信息"),
-    stream: bool = typer.Option(True, "--stream", help="启用流式输出（默认开启）"),
-    config_file: Optional[Path] = typer.Option(None, "--config", help="配置文件路径"),
-    api_key: Optional[str] = typer.Option(None, "--api-key", help="通过命令行注入大模型 API Key，优先级高于配置文件和环境变量")
-):
-    """nezha 对话命令 - 与AI助手进行交互式对话"""
-    # 默认读取用户级别配置
-    if config_file is None:
-        config_file = get_user_config_path()
-    # 显示开始对话的信息
-    console.print(Panel("[bold]开始与AI助手对话[/bold]", title="nezha chat", border_style="blue"))
-    
-    try:
-        # ========== 启用多轮对话流程 ===========
-        # 初始化安全管理器和 Agent
-        # 注意：chat 命令暂时默认 normal，如需支持自定义传参可扩展参数
-        security_level_map = {
-            "strict": SecurityLevel.STRICT,
-            "normal": SecurityLevel.NORMAL,
-            "relaxed": SecurityLevel.RELAXED,
-            "bypass": SecurityLevel.BYPASS
-        }
-        security_enum = security_level_map["normal"]  # 默认 normal
-        security_manager = SecurityManager(security_enum)
-        agent = NezhaAgent(security_manager=security_manager, config_file=config_file, api_key=api_key)
-        
-        # 导入并运行 ChatCommand
-        from ...features.commands.chat_command import ChatCommand
-        chat_cmd = ChatCommand(
-            agent=agent,
-            verbose=verbose,
-            stream=stream
-        )
-        chat_cmd.run(initial_message)
-        
-    except (ValueError, TypeError) as error:
-        console.print(Panel(f"[bold]执行对话时出错:[/bold] {error}", title="错误", border_style="red"))
-        raise typer.Exit(code=1)
-    except Exception as error:
-        console.print(Panel(f"[bold]未预期的错误:[/bold] {error}", title="错误", border_style="red"))
-        raise typer.Exit(code=1)
-
-
 @app.callback(invoke_without_command=True)
 def callback(
     ctx: typer.Context,
-    version: bool = typer.Option(False, "--version", "-V", help="显示版本信息", callback=version_callback)
+    version: bool = typer.Option(False, "--version", "-V", help="显示版本信息", callback=version_callback, is_eager=True)
 ):
     """nezha - 基于AI的命令行代码助手"""
-    # 只在没有子命令时显示欢迎信息
-    if ctx.invoked_subcommand is None and not version:
+    if version:
+        return
+
+    if ctx.invoked_subcommand is None:  # No explicit subcommand was called (e.g. init, plan, models)
+        if ctx.args:  # Check if there are any unparsed arguments
+            initial_message = " ".join(ctx.args)
+            if initial_message.strip(): # Ensure it's not just whitespace
+                # console.print(f"[Debug in callback] Default invocation with ctx.args: {ctx.args}. Invoking 'main' command...")
+                
+                config_file_val = ctx.params.get('config_file')
+                api_key_val = ctx.params.get('api_key')
+                verbose_val = ctx.params.get('verbose', False) 
+                stream_val = ctx.params.get('stream', True)
+
+                try:
+                    # Prepare parameters for the 'main' command
+                    params_for_main = {
+                        'prompt': initial_message,
+                        'verbose': verbose_val,
+                        'stream': stream_val,
+                        'config_file': config_file_val,
+                        'api_key': api_key_val
+                    }
+                    # Clean params, but ensure necessary ones for 'main' like 'prompt' are present
+                    # For boolean flags, ctx.invoke handles defaults well if not provided.
+                    
+                    # Invoke the 'main' command
+                    ctx.invoke(main, **params_for_main)
+
+                except typer.Exit:
+                    raise
+                except Exception as e:
+                    console.print(Panel(f"[bold]在尝试通过回调调用 main 命令时发生错误:[/bold] {e}", title="回调错误", border_style="red"))
+                    raise typer.Exit(code=1)
+                return  # Handled, exit callback
+
+        # If no subcommand AND no args (or only whitespace args), show welcome message
         console.print(
             "[bold cyan]nezha[/bold cyan] - [italic]AI命令行代码助手[/italic] 🚀\n",
             "使用 [bold]nezha <指令>[/bold] 执行任务，[bold]nezha plan <需求>[/bold] 进行交互式规划，[bold]nezha chat[/bold] 进行对话，或 [bold]nezha init[/bold] 初始化配置\n"
         )
         console.print("运行 [bold]nezha --help[/bold] 获取更多帮助信息")
+    # If ctx.invoked_subcommand is NOT None, Typer will proceed to call the subcommand.
 
 if __name__ == "__main__":
     app()

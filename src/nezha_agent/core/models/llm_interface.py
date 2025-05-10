@@ -2,7 +2,7 @@ import os
 import json
 import warnings
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List, Union
 
 import yaml
 
@@ -222,48 +222,93 @@ class OpenAIBasedLLM(LLMInterfaceBase):
                 return completion.choices[0].message.content.strip()
             return "Error: 模型未返回有效内容"
     
-    def chat(self, messages: list, **kwargs):
+    def chat(self, messages: list, tools: Optional[List[Dict[str, Any]]] = None, tool_choice: Optional[Union[str, Dict[str, Any]]] = None, **kwargs):
         """实现通用的 chat 接口
         
         当 stream=True 时，返回生成器而不是字符串
+        当请求包含 tools 或 tool_choice 时，返回完整响应字典以便处理 function call
         """
         try:
             # 获取参数，优先使用传入的参数，其次使用配置中的参数，最后使用默认值
-            max_tokens = kwargs.get("max_tokens", self.config.get("max_tokens", 2048))
-            temperature = kwargs.get("temperature", self.config.get("temperature", 0.7))
-            stream = kwargs.get("stream", False)
+            stream = kwargs.pop("stream", self.config.get("stream", False))
+            temperature = kwargs.pop("temperature", self.config.get("temperature", 0.7))
+            max_tokens = kwargs.pop("max_tokens", self.config.get("max_tokens", 2048))
             
             # 创建请求参数
             params = {
                 "model": self.model,
                 "messages": messages,
-                "max_tokens": max_tokens,
-                "temperature": temperature,
                 "stream": stream,
-                **self.extra_params  # 添加额外参数
+                "temperature": temperature,
+                "max_tokens": max_tokens,
             }
+
+            # 显式添加 tools 和 tool_choice (如果已提供)
+            # 这会覆盖 kwargs 中可能存在的同名参数，确保显式参数优先
+            if tools is not None:
+                params["tools"] = tools
+            if tool_choice is not None:
+                params["tool_choice"] = tool_choice
             
-            # 移除值为 None 的参数
-            params = {k: v for k, v in params.items() if v is not None}
+            # 将 kwargs 中剩余的其他参数（如 top_p, seed 等）添加到 params
+            # 确保这在 tools 和 tool_choice 之后，以避免它们被意外的 kwargs 覆盖
+            # (如果 tools/tool_choice 也可能在 kwargs 中，则此处的 update 行为是合并，显式参数已设置)
+            params.update(kwargs)
             
-            # 调用 API
-            completion = self.client.chat.completions.create(**params)
+            # 检查是否包含 tools 或 tool_choice，这决定了返回格式
+            # 现在直接检查 params 中是否存在这些键，因为它们已经明确添加
+            has_tools = params.get("tools") is not None or params.get("tool_choice") is not None
+            if has_tools:
+                print(f"[DEBUG] 调用 LLM 时包含工具: {len(params.get('tools', []))} 个工具")
+            
+            # SSL 验证由 httpx.Client 初始化时处理，此处无需额外操作
+            # 发起请求
+            response = self.client.chat.completions.create(**params)
             
             # 处理响应
-            return self._process_completion_response(completion, stream)
-            
-        except OpenAIError as error:
-            # 使用通用错误处理
-            error_msg = self._handle_api_error(error, "OpenAI")
             if stream:
-                # 对于流式输出，将错误消息包装成生成器返回
-                def error_generator():
-                    yield error_msg
-                return error_generator()
-            return error_msg
+                # 流式输出模式
+                def response_generator():
+                    for chunk in response:
+                        if hasattr(chunk, "choices") and chunk.choices and hasattr(chunk.choices[0], "delta"):
+                            content = chunk.choices[0].delta.content
+                            if content:
+                                yield content
+                return response_generator()
+            else:
+                # 非流式输出模式
+                # 如果请求中包含 tools 或 tool_choice，说明可能触发 function call，直接返回完整响应字典
+                if has_tools:
+                    try:
+                        # OpenAI 对象支持 model_dump()
+                        completion_dict = response.model_dump()
+                    except AttributeError:
+                        # 退化处理
+                        try:
+                            completion_dict = response.to_dict()
+                        except Exception:
+                            completion_dict = json.loads(str(response)) if isinstance(response, str) else response.__dict__
+                        return completion_dict
+                    else:
+                        # 打印调试信息，查看响应是否包含 tool_calls
+                        if "choices" in completion_dict:
+                            choices = completion_dict.get("choices", [])
+                            if choices and "message" in choices[0]:
+                                message = choices[0]["message"]
+                                if "tool_calls" in message and message["tool_calls"]:
+                                    print(f"[DEBUG] LLM 返回了工具调用: {len(message['tool_calls'])} 个")
+                                    for tc in message["tool_calls"]:
+                                        print(f"[DEBUG] 工具类型: {tc.get('type')}, 名称: {tc.get('function', {}).get('name')}")
+                                else:
+                                    print(f"[DEBUG] LLM 返回中没有工具调用")
+                        return completion_dict
+                # 否则仅返回文本内容
+                return response.choices[0].message.content
+                
         except Exception as error:
-            # 处理其他未预期的错误
-            error_msg = f"Error: Unexpected error: {str(error)}"
+            # 处理错误
+            error_msg = self._handle_api_error(error)
+            print(f"[ERROR] LLM 调用错误: {error_msg}")
             if stream:
                 # 对于流式输出，将错误消息包装成生成器返回
                 def error_generator():
@@ -509,8 +554,10 @@ class QwenLLM(OpenAIBasedLLM):
         except Exception as e:
             raise RuntimeError(f"初始化千问 API 客户端失败: {e}")
     
-    def chat(self, messages: list, **kwargs):
-        stream = kwargs.get("stream", False)
+    def chat(self, messages: list, tools: Optional[List[Dict[str, Any]]] = None, tool_choice: Optional[Union[str, Dict[str, Any]]] = None, **kwargs):
+        stream = kwargs.pop("stream", self.config.get("stream", False))
+        temperature = kwargs.pop("temperature", self.config.get("temperature", 0.7))
+        max_tokens = kwargs.pop("max_tokens", self.config.get("max_tokens", 2048))
         
         try:
             # 初始化客户端（如果还没有初始化）
@@ -522,16 +569,26 @@ class QwenLLM(OpenAIBasedLLM):
                 "model": self.model,
                 "messages": messages,
                 "stream": stream,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
             }
+
+            # 将 kwargs 中剩余的其他参数（如 top_p, seed 等）添加到 call_kwargs
+            call_kwargs.update(kwargs)
+
+            # 显式添加 tools 和 tool_choice (如果已提供)
+            # 这会覆盖 kwargs 中可能存在的同名参数，确保显式参数优先
+            if tools is not None:
+                call_kwargs["tools"] = tools
+            if tool_choice is not None:
+                call_kwargs["tool_choice"] = tool_choice
             
-            # 对于 Qwen3 模型，添加 enable_thinking 参数
+            # 对于 Qwen3 模型，添加 enable_thinking 参数 (如果模型名称包含 'qwen3' 且非流式)
+            # 注意：qwen-max, qwen-turbo, qwen-plus 也可能需要类似处理，具体查阅千问文档
             if "qwen3" in self.model.lower() and not stream:
-                call_kwargs["extra_body"] = {"enable_thinking": False}
-            
-            # 添加其他用户参数
-            for key, value in kwargs.items():
-                if key not in ["stream"]:
-                    call_kwargs[key] = value
+                extra_body = call_kwargs.get("extra_body", {})
+                extra_body["enable_thinking"] = False
+                call_kwargs["extra_body"] = extra_body
             
             # 调用 API
             response = self.client.chat.completions.create(**call_kwargs)
@@ -548,7 +605,35 @@ class QwenLLM(OpenAIBasedLLM):
                 return response_generator()
             else:
                 # 非流式输出模式
+                # 如果请求中包含 tools 或 tool_choice，说明可能触发 function call，直接返回完整响应字典
+                has_tools_explicitly = call_kwargs.get("tools") is not None or call_kwargs.get("tool_choice") is not None
+                if has_tools_explicitly:
+                    try:
+                        # OpenAI 对象支持 model_dump()
+                        completion_dict = response.model_dump()
+                    except AttributeError:
+                        # 退化处理
+                        try:
+                            completion_dict = response.to_dict()
+                        except Exception:
+                            completion_dict = json.loads(str(response)) if isinstance(response, str) else response.__dict__
+                        return completion_dict
+                    else:
+                        # 打印调试信息，查看响应是否包含 tool_calls
+                        if "choices" in completion_dict:
+                            choices = completion_dict.get("choices", [])
+                            if choices and "message" in choices[0]:
+                                message = choices[0]["message"]
+                                if "tool_calls" in message and message["tool_calls"]:
+                                    print(f"[DEBUG] LLM 返回了工具调用: {len(message['tool_calls'])} 个")
+                                    for tc in message["tool_calls"]:
+                                        print(f"[DEBUG] 工具类型: {tc.get('type')}, 名称: {tc.get('function', {}).get('name')}")
+                                else:
+                                    print(f"[DEBUG] LLM 返回中没有工具调用")
+                        return completion_dict
+                # 否则仅返回文本内容
                 return response.choices[0].message.content
+            
         except Exception as e:
             # 处理错误
             error_msg = self._handle_api_error(e, "阿里千问")
@@ -561,6 +646,9 @@ class QwenLLM(OpenAIBasedLLM):
                 return error_msg
 
 
+# 预留：Anthropic、其他 LLM 子类可类似扩展
+
+# 智谱AI LLM 接口
 class ZhipuAILLM(ChineseLLMBase):
     """智谱AI LLM 接口"""
     

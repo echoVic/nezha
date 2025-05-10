@@ -36,6 +36,15 @@ class ChatCommand:
             
             # 调用agent处理对话
             try:
+                current_prompt_obj = self.history[-1] # The last message is the current user prompt
+                if current_prompt_obj["role"] != "user":
+                    # This should not happen if loop logic is correct (always ends with user adding a message)
+                    console.print("[ERROR] Expected last message in history to be from user.")
+                    break # or continue
+                current_prompt_str = current_prompt_obj["content"]
+                # History to pass to agent is all messages *before* the current user's prompt
+                history_to_pass_to_agent = self.history[:-1]
+
                 if not self.stream:
                     # 非流式模式
                     # 添加加载指示器
@@ -46,7 +55,11 @@ class ChatCommand:
                         console=console   # 使用相同的控制台
                     ) as progress:
                         progress.add_task(description="思考中...", total=None)  # 不确定的任务
-                        response = self.agent.plan_chat(self.history, self.verbose)
+                        response = self.agent.plan_chat(
+                            prompt=current_prompt_str, 
+                            history=history_to_pass_to_agent, 
+                            verbose=self.verbose
+                        )
                     
                     self.add_message("assistant", response)
                     console.print(Panel(Markdown(response), title="nezha", border_style="cyan"))
@@ -54,7 +67,12 @@ class ChatCommand:
                     # 流式输出模式
                     console.print("\n[bold cyan]nezha:[/bold cyan]")
                     console.print("[dim](按Ctrl+C可中断生成)[/dim]")
-                    response_generator = self.agent.plan_chat(self.history, verbose=self.verbose, stream=True)
+                    response_generator = self.agent.plan_chat(
+                        prompt=current_prompt_str, 
+                        history=history_to_pass_to_agent, 
+                        verbose=self.verbose, 
+                        stream=True
+                    )
                     response_text = ""
                     try:
                         for chunk in response_generator:
